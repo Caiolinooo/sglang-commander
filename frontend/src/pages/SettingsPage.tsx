@@ -107,7 +107,7 @@ export default function SettingsPage() {
                 <Input 
                   type="password" 
                   value={pwForm.current} 
-                  onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPwForm(p => ({ ...p, current: e.target.value }))}
                   placeholder="Enter current password" 
                 />
               </div>
@@ -116,7 +116,7 @@ export default function SettingsPage() {
                 <Input 
                   type="password" 
                   value={pwForm.newPw} 
-                  onChange={e => setPwForm(p => ({ ...p, newPw: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPwForm(p => ({ ...p, newPw: e.target.value }))}
                   placeholder="Enter new password" 
                 />
               </div>
@@ -125,7 +125,7 @@ export default function SettingsPage() {
                 <Input 
                   type="password" 
                   value={pwForm.confirm} 
-                  onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPwForm(p => ({ ...p, confirm: e.target.value }))}
                   placeholder="Confirm new password" 
                 />
               </div>

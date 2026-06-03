@@ -169,8 +169,8 @@ export default function ModelsPage() {
               <Input 
                 icon={<Search className="w-4 h-4" />}
                 value={query} 
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleSearch()}
                 placeholder="Search HuggingFace Hub (e.g. llama, mistral, whisper)..." 
                 className="h-11"
               />
@@ -179,7 +179,7 @@ export default function ModelsPage() {
               {searching ? 'Searching...' : 'Search'}
             </Button>
           </div>
-
+          
           <div className="flex gap-2 flex-wrap">
             {CATEGORIES.map(c => {
               const Icon = c.icon
@@ -244,7 +244,7 @@ export default function ModelsPage() {
 
       {selectedModel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm p-4 animate-in" onClick={() => setSelectedModel(null)}>
-          <Card className="max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+          <Card className="max-w-md w-full shadow-2xl" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-6">
                 <div>

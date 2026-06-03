@@ -99,7 +99,7 @@ export default function DeployPage() {
               <div className="flex gap-2">
                 <Input 
                   value={netId} 
-                  onChange={e => setNetId(e.target.value)} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNetId(e.target.value)} 
                   placeholder="Enter Network ID (16 chars)"
                   className="flex-1 font-mono text-sm"
                 />
@@ -153,7 +153,7 @@ export default function DeployPage() {
               <div className="flex gap-2">
                 <Input 
                   value={keyName} 
-                  onChange={e => setKeyName(e.target.value)} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeyName(e.target.value)} 
                   placeholder="e.g., Python Script, Web App"
                   className="flex-1 text-sm"
                 />

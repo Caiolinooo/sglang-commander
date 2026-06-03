@@ -51,19 +51,19 @@ export default function ServerProfilesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Profile Name</label>
-                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Llama-3 Local" />
+                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Llama-3 Local" />
               </div>
               <div>
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Model Path (HF or local)</label>
-                <Input value={form.model_path} onChange={e => setForm(p => ({ ...p, model_path: e.target.value }))} placeholder="meta-llama/Llama-3.2-3B-Instruct" />
+                <Input value={form.model_path} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, model_path: e.target.value }))} placeholder="meta-llama/Llama-3.2-3B-Instruct" />
               </div>
               <div>
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Host</label>
-                <Input value={form.host} onChange={e => setForm(p => ({ ...p, host: e.target.value }))} placeholder="127.0.0.1" />
+                <Input value={form.host} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, host: e.target.value }))} placeholder="127.0.0.1" />
               </div>
               <div>
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Port</label>
-                <Input type="number" value={form.port} onChange={e => setForm(p => ({ ...p, port: Number(e.target.value) }))} placeholder="30000" />
+                <Input type="number" value={form.port} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, port: Number(e.target.value) }))} placeholder="30000" />
               </div>
             </div>
             
@@ -72,7 +72,7 @@ export default function ServerProfilesPage() {
                 <input 
                   type="checkbox" 
                   checked={form.is_remote} 
-                  onChange={e => setForm(p => ({ ...p, is_remote: e.target.checked }))} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, is_remote: e.target.checked }))} 
                   className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 bg-surface" 
                 /> 
                 Remote Server
@@ -82,7 +82,7 @@ export default function ServerProfilesPage() {
             {form.is_remote && (
               <div className="animate-in fade-in zoom-in-95">
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Remote URL</label>
-                <Input value={form.remote_url} onChange={e => setForm(p => ({ ...p, remote_url: e.target.value }))} placeholder="https://api.example.com" />
+                <Input value={form.remote_url} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, remote_url: e.target.value }))} placeholder="https://api.example.com" />
               </div>
             )}
             

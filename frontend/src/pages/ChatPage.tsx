@@ -81,7 +81,7 @@ export default function ChatPage() {
             <span className="text-xs font-medium text-text-muted">Model</span>
             <Input 
               value={model} 
-              onChange={e => setModel(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setModel(e.target.value)}
               className="w-40 h-8 text-xs bg-bg"
               placeholder="Model name" 
             />
@@ -92,7 +92,7 @@ export default function ChatPage() {
               type="number" 
               min={0} max={2} step={0.1} 
               value={temp} 
-              onChange={e => setTemp(parseFloat(e.target.value))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTemp(parseFloat(e.target.value))}
               className="w-16 h-8 text-xs bg-bg text-center px-1" 
             />
           </div>

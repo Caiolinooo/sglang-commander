@@ -173,7 +173,7 @@ export default function ServerPage() {
                 <Input
                   icon={<Search className="h-4 w-4" />}
                   value={config.model_path}
-                  onChange={e => { setConfig(p => ({ ...p, model_path: e.target.value })); setSelectedPreset(null); setShowModelDropdown(true); setModelSearch(e.target.value) }}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setConfig(p => ({ ...p, model_path: e.target.value })); setSelectedPreset(null); setShowModelDropdown(true); setModelSearch(e.target.value) }}
                   onFocus={() => setShowModelDropdown(true)}
                   placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct or /path/to/local/model"
                   className="h-11"
@@ -207,20 +207,20 @@ export default function ServerPage() {
               <CardContent className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-text-muted mb-1.5 block">Host</label>
-                  <Input value={config.host} onChange={e => update('host', e.target.value)} placeholder="127.0.0.1" />
+                  <Input value={config.host} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('host', e.target.value)} placeholder="127.0.0.1" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-muted mb-1.5 block">Port</label>
                   <div className="flex items-center gap-3">
-                    <input type="range" min={1024} max={65535} value={config.port} onChange={e => update('port', Number(e.target.value))}
+                    <input type="range" min={1024} max={65535} value={config.port} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('port', Number(e.target.value))}
                       className="flex-1" />
-                    <Input type="number" value={config.port} onChange={e => update('port', Number(e.target.value))} className="w-24 text-center" />
+                    <Input type="number" value={config.port} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('port', Number(e.target.value))} className="w-24 text-center" />
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-muted mb-1.5 block">Tensor Parallel</label>
                   <div className="flex items-center gap-3">
-                    <input type="range" min={1} max={8} value={config.tensor_parallel_size} onChange={e => update('tensor_parallel_size', Number(e.target.value))}
+                    <input type="range" min={1} max={8} value={config.tensor_parallel_size} onChange={(e: React.ChangeEvent<HTMLInputElement>) => update('tensor_parallel_size', Number(e.target.value))}
                       className="flex-1" />
                     <span className="text-sm font-mono font-medium bg-surface-2 px-3 py-1.5 rounded-md border border-border w-12 text-center">{config.tensor_parallel_size}</span>
                   </div>

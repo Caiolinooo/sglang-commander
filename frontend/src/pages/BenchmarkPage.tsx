@@ -53,7 +53,7 @@ export default function BenchmarkPage() {
                 <Input 
                   type={f === 'host' ? 'text' : 'number'} 
                   value={config[f as keyof typeof config] as string | number}
-                  onChange={e => update(f, f === 'host' ? e.target.value : Number(e.target.value))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(f, f === 'host' ? e.target.value : Number(e.target.value))}
                 />
               </div>
             ))}
