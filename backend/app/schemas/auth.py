@@ -9,6 +9,7 @@ class SetupRequest(BaseModel):
     password: str = Field(..., min_length=8)
     server_port: int = Field(default=8080, ge=1024, le=65535)
     server_name: str = Field(default="My SGLang Server")
+    huggingface_token: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

@@ -3,7 +3,7 @@ import type { ServerStatus, MetricsSnapshot, HFModel, ZeroTierStatus, ServerProf
 
 // Auth
 export const checkSetupStatus = () => apiClient.get('/auth/setup-status')
-export const setupAdmin = (data: { username: string; email: string; password: string; server_port?: number }) =>
+export const setupAdmin = (data: { username: string; email: string; password: string; server_port?: number; huggingface_token?: string }) =>
   apiClient.post('/auth/setup', data)
 export const login = (username: string, password: string) =>
   apiClient.post('/auth/login', { username, password })
@@ -57,6 +57,7 @@ export const getModelCard = (repo_id: string) =>
   apiClient.get(`/models/card/${encodeURIComponent(repo_id)}`)
 export const getModelInfo_ = (repo_id: string) =>
   apiClient.get(`/models/info/${encodeURIComponent(repo_id)}`)
+export const validateHFToken = () => apiClient.get('/models/validate-token')
 
 // Metrics
 export const getLatestMetrics = () => apiClient.get<MetricsSnapshot>('/metrics/latest')
@@ -74,6 +75,8 @@ export const leaveZTNetwork = (network_id: string) =>
 export const getSettings = () => apiClient.get('/settings/')
 export const updateSetting = (key: string, value: unknown) =>
   apiClient.put('/settings/', { key, value })
+export const saveHuggingFaceToken = (token: string) =>
+  apiClient.post('/settings/huggingface-token', { token })
 
 // Updates
 export const checkUpdates = () => apiClient.get<UpdateCheckResponse>('/update/check')

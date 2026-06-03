@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     jwt_refresh_expire_days: int = 7
 
     zerotier_central_token: Optional[str] = None
+    huggingface_token: Optional[str] = None
 
     sglang_default_host: str = "127.0.0.1"
     sglang_default_port: int = 30000

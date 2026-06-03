@@ -5,7 +5,7 @@ from huggingface_hub import HfApi, snapshot_download, scan_cache_dir
 from app.config import settings
 
 
-hf_api = HfApi()
+hf_api = HfApi(token=settings.huggingface_token)
 
 
 class ModelManager:
@@ -55,7 +55,7 @@ class ModelManager:
                 revision=revision,
                 local_dir_use_symlinks=False,
                 resume_download=True,
-                token=os.environ.get("HF_TOKEN", None),
+                token=settings.huggingface_token,
             )
             self._download_tasks[task_id] = {
                 "status": "completed",
@@ -77,6 +77,13 @@ class ModelManager:
             if repo_id in task_id:
                 return info
         return {"status": "not_found"}
+
+    async def validate_token(self) -> dict:
+        try:
+            info = hf_api.whoami()
+            return {"valid": True, "name": info.get("name"), "email": info.get("email")}
+        except Exception as e:
+            return {"valid": False, "error": str(e)}
 
     async def list_local_models(self) -> list[dict]:
         try:

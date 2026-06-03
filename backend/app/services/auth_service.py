@@ -18,7 +18,24 @@ class AuthService:
     async def is_setup_complete(self) -> bool:
         return os.path.exists(settings.setup_complete_file)
 
-    async def complete_setup(self, username: str, email: str, password: str) -> dict:
+    def _save_env_var(self, key: str, value: str) -> None:
+        env_path = ".env"
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+        found = False
+        with open(env_path, "w") as f:
+            for line in lines:
+                if line.strip().startswith(f"{key}="):
+                    f.write(f"{key}={value}\n")
+                    found = True
+                else:
+                    f.write(line)
+            if not found:
+                f.write(f"{key}={value}\n")
+
+    async def complete_setup(self, username: str, email: str, password: str, huggingface_token: Optional[str] = None) -> dict:
         async with async_session_factory() as db:
             user = User(
                 username=username,
@@ -39,6 +56,9 @@ class AuthService:
 
             with open(settings.setup_complete_file, "w") as f:
                 f.write(f"setup_at={datetime.now(timezone.utc).isoformat()}\n")
+
+            if huggingface_token:
+                self._save_env_var("HUGGINGFACE_TOKEN", huggingface_token)
 
             return {
                 "access_token": access,

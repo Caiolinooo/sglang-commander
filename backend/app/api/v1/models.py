@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.models import HFSearchRequest, DownloadRequest
@@ -15,6 +15,11 @@ async def search_models(
     current_user: User = Depends(get_current_user),
 ):
     return await model_manager.search_hf(query, limit, task or None)
+
+
+@router.get("/validate-token")
+async def validate_hf_token(current_user: User = Depends(get_current_user)):
+    return await model_manager.validate_token()
 
 
 @router.post("/download")

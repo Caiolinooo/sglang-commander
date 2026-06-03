@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate } from '../api/endpoints'
-import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search } from 'lucide-react'
+import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate, saveHuggingFaceToken, validateHFToken } from '../api/endpoints'
+import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search, Key } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -12,6 +12,10 @@ export default function SettingsPage() {
   const [pwMsg, setPwMsg] = useState<{ text: string, type: 'success' | 'error' | '' }>({ text: '', type: '' })
   const [updateInfo, setUpdateInfo] = useState<{ update_available?: boolean; latest_version?: string; changelog?: string; current_version?: string; download_url?: string }>({})
   const [dlStatus, setDlStatus] = useState<{ status: string; progress: number; error?: string }>({ status: 'idle', progress: 0 })
+  const [hfToken, setHfToken] = useState('')
+  const [hfStatus, setHfStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [hfValidation, setHfValidation] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
+  const [hfUser, setHfUser] = useState<{ name?: string; email?: string }>({})
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   useEffect(() => { getSettings().then(r => setSettings(r.data)).catch(() => {}) }, [])
@@ -54,6 +58,24 @@ export default function SettingsPage() {
   const handleApply = async () => { try { await applyUpdate() } catch {} }
   const handleCancel = async () => { try { await cancelUpdate() } catch {}; if (pollRef.current) clearInterval(pollRef.current); setDlStatus({ status: 'idle', progress: 0 }) }
 
+  const handleSaveHFToken = async () => {
+    setHfStatus('saving')
+    try {
+      await saveHuggingFaceToken(hfToken)
+      setHfStatus('saved')
+      setTimeout(() => setHfStatus('idle'), 3000)
+    } catch { setHfStatus('error') }
+  }
+
+  const handleValidateHF = async () => {
+    setHfValidation('checking')
+    try {
+      const r = await validateHFToken()
+      if (r.data.valid) { setHfValidation('valid'); setHfUser({ name: r.data.name, email: r.data.email }) }
+      else { setHfValidation('invalid') }
+    } catch { setHfValidation('invalid') }
+  }
+
   return (
     <div className="p-8 space-y-6 animate-in max-w-4xl mx-auto">
       <div>
@@ -88,6 +110,51 @@ export default function SettingsPage() {
               <div className="p-4 text-sm text-text-muted text-center">Loading settings...</div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Key className="w-5 h-5 text-primary" />
+            <CardTitle>HuggingFace Integration</CardTitle>
+          </div>
+          <CardDescription>Configure API token for model search and download</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3 p-3 bg-surface-2 rounded-xl border border-border">
+            <div className={`w-2 h-2 rounded-full ${settings.huggingface_token ? 'bg-success' : 'bg-text-muted'}`} />
+            <span className="text-sm font-medium">{settings.huggingface_token ? 'Token configured' : 'No token configured'}</span>
+          </div>
+          
+          <div>
+            <label className="text-xs font-medium text-text-muted mb-1.5 block">HuggingFace Token</label>
+            <div className="flex gap-2">
+              <Input 
+                type="password"
+                value={hfToken} 
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHfToken(e.target.value)}
+                placeholder="hf_xxxxxxxxxxxxxxxxxxxx"
+                className="flex-1 font-mono"
+              />
+              <Button onClick={handleSaveHFToken} disabled={!hfToken.trim() || hfStatus === 'saving'} className="gap-2 shrink-0">
+                {hfStatus === 'saving' ? 'Saving...' : hfStatus === 'saved' ? 'Saved!' : 'Save'}
+              </Button>
+              <Button variant="outline" onClick={handleValidateHF} disabled={!settings.huggingface_token || hfValidation === 'checking'} className="gap-2 shrink-0">
+                {hfValidation === 'checking' ? 'Checking...' : 'Verify'}
+              </Button>
+            </div>
+            {hfValidation === 'valid' && (
+              <p className="text-success text-xs mt-2 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Connected as {hfUser.name || hfUser.email}</p>
+            )}
+            {hfValidation === 'invalid' && (
+              <p className="text-danger text-xs mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Invalid token</p>
+            )}
+          </div>
+          <p className="text-xs text-text-muted">
+            Get your token at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener" className="text-primary hover:underline">huggingface.co/settings/tokens</a>
+            {' '}(required for gated models like Llama, Mistral)
+          </p>
         </CardContent>
       </Card>
 

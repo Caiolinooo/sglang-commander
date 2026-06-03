@@ -14,3 +14,4 @@ class SettingsResponse(BaseModel):
     sglang_default_port: int = 30000
     update_check_url_selfhosted: Optional[str] = None
     debug: bool = False
+    huggingface_token: Optional[str] = None

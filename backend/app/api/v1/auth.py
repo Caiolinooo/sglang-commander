@@ -24,7 +24,7 @@ async def get_setup_status():
 async def setup_admin(req: SetupRequest):
     if await auth_service.is_setup_complete():
         raise HTTPException(status_code=400, detail="Setup already completed")
-    result = await auth_service.complete_setup(req.username, req.email, req.password)
+    result = await auth_service.complete_setup(req.username, req.email, req.password, req.huggingface_token)
     return result
 
 
