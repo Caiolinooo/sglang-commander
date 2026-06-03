@@ -1,16 +1,27 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { startServer, stopServer, restartServer, getServerStatus, getServerLogs, listServerProfiles, getActiveProfile } from '../api/endpoints'
 import type { ServerProfile } from '../types'
 
-const QUANT_OPTIONS = [
-  { value: '', label: 'None' },
-  { value: 'awq', label: 'AWQ 4-bit' },
-  { value: 'fp8', label: 'FP8' },
-  { value: 'gptq', label: 'GPTQ 4-bit' },
-  { value: 'marlin', label: 'Marlin 4-bit' },
-  { value: 'gguf', label: 'GGUF' },
-  { value: 'bitsandbytes', label: 'Bitsandbytes' },
+const MODEL_PRESETS = [
+  { id: 'llama3.1-8b', name: 'Llama 3.1 8B', path: 'meta-llama/Llama-3.1-8B-Instruct', icon: '🦙', desc: 'General purpose, fast', quant: '', ctx: 8192 },
+  { id: 'llama3.1-70b', name: 'Llama 3.1 70B', path: 'meta-llama/Llama-3.1-70B-Instruct', icon: '🦙', desc: 'High quality, needs VRAM', quant: 'awq', ctx: 8192 },
+  { id: 'qwen2.5-7b', name: 'Qwen 2.5 7B', path: 'Qwen/Qwen2.5-7B-Instruct', icon: '💎', desc: 'Multilingual, coding', quant: '', ctx: 32768 },
+  { id: 'qwen2.5-72b', name: 'Qwen 2.5 72B', path: 'Qwen/Qwen2.5-72B-Instruct', icon: '💎', desc: 'Top-tier, needs 2+ GPUs', quant: 'awq', ctx: 32768 },
+  { id: 'deepseek-v3', name: 'DeepSeek V3', path: 'deepseek-ai/DeepSeek-V3-0324', icon: '🔮', desc: 'MoE, excellent reasoning', quant: 'fp8', ctx: 16384 },
+  { id: 'phi-4', name: 'Phi-4 14B', path: 'microsoft/phi-4', icon: '🔬', desc: 'Compact, Microsoft research', quant: '', ctx: 16384 },
+  { id: 'mistral-nemo', name: 'Mistral Nemo', path: 'mistralai/Mistral-Nemo-Instruct-2407', icon: '🌊', desc: 'Fast 12B, multilingual', quant: '', ctx: 128000 },
+  { id: 'gemma2-9b', name: 'Gemma 2 9B', path: 'google/gemma-2-9b-it', icon: '💎', desc: 'Google, efficient', quant: '', ctx: 8192 },
 ]
+
+const QUANT_OPTIONS = [
+  { value: '', label: 'None', desc: 'Full precision' },
+  { value: 'awq', label: 'AWQ 4-bit', desc: 'Best quality/size' },
+  { value: 'fp8', label: 'FP8', desc: 'Hopper GPUs' },
+  { value: 'gptq', label: 'GPTQ 4-bit', desc: 'Fast inference' },
+  { value: 'gguf', label: 'GGUF', desc: 'CPU/GPU hybrid' },
+]
+
+const DTYPE_OPTIONS = ['auto', 'half', 'bfloat16', 'float32']
 
 export default function ServerPage() {
   const [config, setConfig] = useState({
@@ -25,7 +36,11 @@ export default function ServerPage() {
   const [profiles, setProfiles] = useState<ServerProfile[]>([])
   const [activeProfile, setActiveProfile] = useState<ServerProfile | null>(null)
   const [tab, setTab] = useState<'config' | 'logs'>('config')
+  const [modelSearch, setModelSearch] = useState('')
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
+  const modelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchStatus(); fetchProfiles() }, [])
   useEffect(() => { const i = setInterval(() => { fetchStatus(); fetchLogs() }, 3000); return () => clearInterval(i) }, [cursor])
@@ -41,6 +56,19 @@ export default function ServerPage() {
     try { const [p, a] = await Promise.all([listServerProfiles(), getActiveProfile()]); setProfiles(p.data); setActiveProfile(a.data) } catch {}
   }
 
+  const filteredModels = useMemo(() => {
+    if (!modelSearch) return MODEL_PRESETS
+    const q = modelSearch.toLowerCase()
+    return MODEL_PRESETS.filter(m => m.name.toLowerCase().includes(q) || m.path.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q))
+  }, [modelSearch])
+
+  const selectPreset = (preset: typeof MODEL_PRESETS[0]) => {
+    setConfig(p => ({ ...p, model_path: preset.path, quantization: preset.quant, context_length: preset.ctx }))
+    setSelectedPreset(preset.id)
+    setModelSearch('')
+    setShowModelDropdown(false)
+  }
+
   const loadProfile = (profile: ServerProfile) => {
     let args: Record<string, unknown> = {}
     try { args = JSON.parse(profile.args_json || '{}') } catch {}
@@ -54,6 +82,7 @@ export default function ServerPage() {
       trust_remote_code: (args.trust_remote_code as boolean) || false,
       extra_args: args.extra_args as Record<string, unknown> || {},
     })
+    setSelectedPreset(null)
   }
 
   const handleStart = async () => { setLoading(true); try { await startServer(config) } catch (e) { console.error(e) } finally { setLoading(false) } }
@@ -62,37 +91,31 @@ export default function ServerPage() {
 
   const uptime = status.uptime_seconds ? `${Math.floor(status.uptime_seconds / 60)}m ${Math.floor(status.uptime_seconds % 60)}s` : '--'
   const dotClass = status.running ? (status.health === 'healthy' ? 'running' : 'warning') : 'stopped'
-
   const update = (f: string, v: unknown) => setConfig(p => ({ ...p, [f]: v }))
 
   return (
     <div className="p-6 space-y-5 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold gradient-text">Server Control</h1>
-          <p className="text-text-muted text-sm mt-0.5">Manage your SGLang inference server</p>
+          <p className="text-text-muted text-sm mt-0.5">Configure and launch your SGLang server</p>
         </div>
-        <div className="flex items-center gap-4">
-          {profiles.length > 0 && (
-            <select value={activeProfile?.id || ''} onChange={e => { const p = profiles.find(x => x.id === Number(e.target.value)); if (p) loadProfile(p) }}
-              className="px-3 py-2 rounded-xl glass text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
-              <option value="">Manual Config</option>
-              {profiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.is_remote ? ' (remote)' : ''}</option>)}
-            </select>
-          )}
-          <div className="flex items-center gap-2 glass rounded-xl px-4 py-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 glass rounded-xl px-4 py-2.5">
             <span className={`status-dot ${dotClass}`} />
             <div>
-              <p className="text-xs font-medium">{status.running ? 'Active' : 'Stopped'}</p>
-              {status.running && <p className="text-[10px] text-text-muted">{uptime}</p>}
+              <p className="text-xs font-semibold">{status.running ? 'Running' : 'Stopped'}</p>
+              {status.running && <p className="text-[10px] text-text-muted">{uptime} | {status.model_path.split('/').pop()}</p>}
             </div>
           </div>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-2">
-        {['config', 'logs'].map(t => (
-          <button key={t} onClick={() => setTab(t as typeof tab)}
+        {(['config', 'logs'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize ${
               tab === t ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'glass hover:bg-surface-2'
             }`}>
@@ -102,77 +125,189 @@ export default function ServerPage() {
       </div>
 
       {tab === 'config' && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Model Path</label>
-              <input value={config.model_path} onChange={e => update('model_path', e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
-                placeholder="meta-llama/Llama-3.1-8B" />
+        <div className="space-y-5">
+          {/* Model Presets */}
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Quick Select Model</h3>
+              {selectedPreset && (
+                <button onClick={() => { setSelectedPreset(null); setConfig(p => ({ ...p, model_path: '' })) }}
+                  className="text-xs text-primary hover:underline">
+                  Clear selection
+                </button>
+              )}
             </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Host</label>
-              <input value={config.host} onChange={e => update('host', e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {MODEL_PRESETS.map(preset => (
+                <button key={preset.id} onClick={() => selectPreset(preset)}
+                  className={`glass rounded-xl p-3 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 ${
+                    selectedPreset === preset.id ? 'ring-2 ring-primary/60 bg-primary/5' : 'hover:bg-surface-2'
+                  }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{preset.icon}</span>
+                    <span className="text-sm font-medium truncate">{preset.name}</span>
+                  </div>
+                  <p className="text-[10px] text-text-muted truncate">{preset.desc}</p>
+                  <p className="text-[10px] text-text-muted font-mono mt-1 truncate">{preset.path}</p>
+                </button>
+              ))}
             </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Port</label>
-              <input type="number" value={config.port} onChange={e => update('port', Number(e.target.value))}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" />
+          </div>
+
+          {/* Custom Model Input */}
+          <div className="glass rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Or Enter Model Path</h3>
+            <div className="relative" ref={modelInputRef}>
+              <input
+                value={config.model_path}
+                onChange={e => { setConfig(p => ({ ...p, model_path: e.target.value })); setSelectedPreset(null); setShowModelDropdown(true) }}
+                onFocus={() => setShowModelDropdown(true)}
+                placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct or /path/to/local/model"
+                className="w-full px-4 py-3 rounded-xl glass border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
+              />
+              {showModelDropdown && filteredModels.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 glass rounded-xl border border-border shadow-xl max-h-48 overflow-y-auto">
+                  {filteredModels.map(m => (
+                    <button key={m.id} onClick={() => selectPreset(m)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-primary/10 transition text-sm flex items-center gap-2">
+                      <span>{m.icon}</span>
+                      <div>
+                        <p className="font-medium">{m.name}</p>
+                        <p className="text-[10px] text-text-muted">{m.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tensor Parallel</label>
-              <input type="number" min={1} max={8} value={config.tensor_parallel_size} onChange={e => update('tensor_parallel_size', Number(e.target.value))}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" />
+          </div>
+
+          {/* Server Settings */}
+          <div className="glass rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Server Settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs text-text-muted">Host</label>
+                <input value={config.host} onChange={e => update('host', e.target.value)}
+                  className="w-full mt-1.5 px-3 py-2.5 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
+                  placeholder="127.0.0.1" />
+              </div>
+              <div>
+                <label className="text-xs text-text-muted">Port</label>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <input type="range" min={1024} max={65535} value={config.port} onChange={e => update('port', Number(e.target.value))}
+                    className="flex-1 accent-primary" />
+                  <input type="number" value={config.port} onChange={e => update('port', Number(e.target.value))}
+                    className="w-20 px-2 py-2 rounded-lg bg-bg border border-border text-sm text-center" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-text-muted">Tensor Parallel</label>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <input type="range" min={1} max={8} value={config.tensor_parallel_size} onChange={e => update('tensor_parallel_size', Number(e.target.value))}
+                    className="flex-1 accent-primary" />
+                  <span className="text-sm font-mono w-8 text-center">{config.tensor_parallel_size}</span>
+                </div>
+              </div>
             </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Quantization</label>
-              <select value={config.quantization} onChange={e => update('quantization', e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition">
-                {QUANT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+          </div>
+
+          {/* Model Settings */}
+          <div className="glass rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Model Settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs text-text-muted">Quantization</label>
+                <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                  {QUANT_OPTIONS.map(o => (
+                    <button key={o.value} onClick={() => update('quantization', o.value)}
+                      className={`px-2 py-1.5 rounded-lg text-xs transition ${
+                        config.quantization === o.value ? 'bg-primary text-white' : 'glass hover:bg-surface-2'
+                      }`}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-text-muted">Dtype</label>
+                <div className="flex gap-1.5 mt-1.5">
+                  {DTYPE_OPTIONS.map(d => (
+                    <button key={d} onClick={() => update('dtype', d)}
+                      className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition ${
+                        config.dtype === d ? 'bg-primary text-white' : 'glass hover:bg-surface-2'
+                      }`}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-text-muted">Context Length</label>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <input type="range" min={0} max={131072} step={1024} value={config.context_length} onChange={e => update('context_length', Number(e.target.value))}
+                    className="flex-1 accent-primary" />
+                  <span className="text-sm font-mono w-16 text-right">{config.context_length === 0 ? 'auto' : `${Math.round(config.context_length / 1024)}K`}</span>
+                </div>
+              </div>
             </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Dtype</label>
-              <select value={config.dtype} onChange={e => update('dtype', e.target.value)}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition">
-                {['auto', 'half', 'bfloat16', 'float32'].map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            <div className="glass rounded-xl p-4">
-              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Context Length</label>
-              <input type="number" value={config.context_length} onChange={e => update('context_length', Number(e.target.value))}
-                className="w-full mt-1.5 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" />
-            </div>
-            <div className="glass rounded-xl p-4 flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={config.enable_multimodal} onChange={e => update('enable_multimodal', e.target.checked)}
-                  className="accent-primary w-4 h-4" />
-                Multimodal (vision/audio)
+
+            {/* Toggles */}
+            <div className="flex gap-6 mt-4 pt-4 border-t border-border/50">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className={`w-10 h-5 rounded-full transition-colors relative ${config.enable_multimodal ? 'bg-primary' : 'bg-surface-3'}`}
+                  onClick={() => update('enable_multimodal', !config.enable_multimodal)}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${config.enable_multimodal ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </div>
+                <span className="text-xs group-hover:text-primary transition-colors">Multimodal (Vision/Audio)</span>
               </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={config.trust_remote_code} onChange={e => update('trust_remote_code', e.target.checked)}
-                  className="accent-primary w-4 h-4" />
-                Trust Remote Code
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className={`w-10 h-5 rounded-full transition-colors relative ${config.trust_remote_code ? 'bg-primary' : 'bg-surface-3'}`}
+                  onClick={() => update('trust_remote_code', !config.trust_remote_code)}>
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${config.trust_remote_code ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </div>
+                <span className="text-xs group-hover:text-primary transition-colors">Trust Remote Code</span>
               </label>
             </div>
           </div>
 
+          {/* Profiles */}
+          {profiles.length > 0 && (
+            <div className="glass rounded-2xl p-5">
+              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Saved Profiles</h3>
+              <div className="flex gap-2 flex-wrap">
+                {profiles.map(p => (
+                  <button key={p.id} onClick={() => loadProfile(p)}
+                    className={`glass rounded-xl px-4 py-2 text-sm transition hover:bg-surface-2 ${activeProfile?.id === p.id ? 'ring-2 ring-primary/40' : ''}`}>
+                    <span className="font-medium">{p.name}</span>
+                    {p.is_remote && <span className="ml-1.5 text-[10px] text-info">remote</span>}
+                    {activeProfile?.id === p.id && <span className="ml-1.5 text-[10px] text-success">active</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
           <div className="flex gap-3">
             <button onClick={handleStart} disabled={loading || status.running || !config.model_path}
-              className="px-5 py-2.5 bg-success hover:bg-success/90 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-success/20">
-              {loading ? 'Starting...' : '\u25b6 Deploy Server'}
+              className="px-8 py-3 bg-gradient-to-r from-success to-emerald-600 hover:from-success hover:to-emerald-700 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-success/30 disabled:shadow-none flex items-center gap-2">
+              {loading ? (
+                <><span className="animate-spin">{'\u25cb'}</span> Starting...</>
+              ) : (
+                <>{'\u25b6'} Deploy Server</>
+              )}
             </button>
             <button onClick={handleStop} disabled={!status.running}
-              className="px-5 py-2.5 bg-danger hover:bg-danger/90 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition">
-              '\u25a0 Stop'
+              className="px-6 py-3 bg-danger hover:bg-danger/90 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-all disabled:shadow-none flex items-center gap-2">
+              {'\u25a0'} Stop
             </button>
             <button onClick={handleRestart} disabled={!status.running}
-              className="px-5 py-2.5 glass hover:bg-surface-2 disabled:opacity-40 text-white rounded-xl text-sm font-medium transition">
-              '\ud83d\udd04 Restart'
+              className="px-6 py-3 glass hover:bg-surface-2 disabled:opacity-40 rounded-xl text-sm font-bold transition-all disabled:shadow-none flex items-center gap-2">
+              {'\u21bb'} Restart
             </button>
           </div>
-        </>
+        </div>
       )}
 
       {tab === 'logs' && (
