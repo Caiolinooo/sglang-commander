@@ -43,10 +43,24 @@ class ServerManager:
         port = config.get("port", settings.sglang_default_port)
         tp = config.get("tensor_parallel_size", 1)
 
-        # Find the correct Python executable (sys.executable may be uvicorn with --reload)
+        # Find Python inside the active venv
         import sys
         import shutil
-        python_cmd = shutil.which("python3") or shutil.which("python") or sys.executable
+        if hasattr(sys, 'prefix') and sys.prefix != getattr(sys, 'base_prefix', sys.prefix):
+            python_cmd = os.path.join(sys.prefix, 'bin', 'python')
+        else:
+            python_cmd = shutil.which("python3") or shutil.which("python") or sys.executable
+
+        # Pre-flight: verify sglang is importable
+        check = await asyncio.create_subprocess_exec(
+            python_cmd, "-c", "import sglang; print(sglang.__version__)",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await check.communicate()
+        if check.returncode != 0:
+            msg = f"sglang not installed in {python_cmd}: {stderr.decode(errors='replace').strip()}"
+            self._log_lines.append(f"[ERROR] {msg}")
+            return {"status": "error", "message": msg}
 
         cmd = [
             python_cmd, "-m", "sglang.launch_server",
@@ -95,6 +109,13 @@ class ServerManager:
 
         self._start_time = time.time()
         asyncio.create_task(self._read_output())
+
+        # Wait briefly to catch immediate crashes
+        await asyncio.sleep(1.0)
+        if self._process.returncode is not None:
+            msg = f"Process exited immediately with code {self._process.returncode}"
+            self._log_lines.append(f"[ERROR] {msg}")
+            return {"status": "error", "message": msg, "logs": self._log_lines[-10:]}
 
         return {
             "status": "started",
