@@ -43,9 +43,10 @@ class ServerManager:
         port = config.get("port", settings.sglang_default_port)
         tp = config.get("tensor_parallel_size", 1)
 
-        # Find the correct Python executable
+        # Find the correct Python executable (sys.executable may be uvicorn with --reload)
         import sys
-        python_cmd = sys.executable or "python3"
+        import shutil
+        python_cmd = shutil.which("python3") or shutil.which("python") or sys.executable
 
         cmd = [
             python_cmd, "-m", "sglang.launch_server",
