@@ -43,8 +43,12 @@ class ServerManager:
         port = config.get("port", settings.sglang_default_port)
         tp = config.get("tensor_parallel_size", 1)
 
+        # Find the correct Python executable
+        import sys
+        python_cmd = sys.executable or "python3"
+
         cmd = [
-            "python3", "-m", "sglang.launch_server",
+            python_cmd, "-m", "sglang.launch_server",
             "--model-path", model_path,
             "--host", host,
             "--port", str(port),
@@ -71,11 +75,22 @@ class ServerManager:
             else:
                 cmd.extend([flag, str(v)])
 
-        self._process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        self._log_lines.append(f"[CMD] {' '.join(cmd)}")
+
+        try:
+            self._process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as e:
+            msg = f"Failed to start: Python executable not found at {python_cmd}. Error: {e}"
+            self._log_lines.append(f"[ERROR] {msg}")
+            return {"status": "error", "message": msg}
+        except Exception as e:
+            msg = f"Failed to start server: {e}"
+            self._log_lines.append(f"[ERROR] {msg}")
+            return {"status": "error", "message": msg}
 
         self._start_time = time.time()
         asyncio.create_task(self._read_output())
@@ -96,12 +111,18 @@ class ServerManager:
                 self._log_lines.append(f"[{prefix}] {decoded}")
                 if "health" in decoded.lower() or "ready" in decoded.lower():
                     self._health_status = "healthy"
+                if "error" in decoded.lower() or "traceback" in decoded.lower():
+                    self._health_status = "error"
 
         if self._process and self._process.stdout:
             await asyncio.gather(
                 read_stream(self._process.stdout, "OUT"),
                 read_stream(self._process.stderr, "ERR"),
             )
+
+        if self._process and self._process.returncode is not None and self._process.returncode != 0:
+            self._log_lines.append(f"[ERROR] Process exited with code {self._process.returncode}")
+            self._health_status = "error"
 
     async def stop(self) -> dict:
         if not self.is_running:
