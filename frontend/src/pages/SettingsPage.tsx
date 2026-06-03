@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate } from '../api/endpoints'
-import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -222,5 +222,4 @@ export default function SettingsPage() {
     </div>
   )
 }
-import { Search } from 'lucide-react'
 
