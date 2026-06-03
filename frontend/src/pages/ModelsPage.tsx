@@ -1,14 +1,20 @@
 import { useState, useEffect } from 'react'
 import { searchModels, downloadModel, listLocalModels, startServer } from '../api/endpoints'
 import type { HFModel } from '../types'
+import { Brain, Camera, Link as LinkIcon, Mic, Volume2, Search, Zap, HardDrive, Download, Heart, RefreshCw, Inbox, Database, Check } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../components/ui/Button'
 
 const CATEGORIES = [
-  { id: 'text-generation', label: 'LLM', icon: '\ud83e\udde0' },
-  { id: 'image-text-to-text', label: 'Vision', icon: '\ud83d\udcf7' },
-  { id: 'text-embedding', label: 'Embeddings', icon: '\ud83d\udd17' },
-  { id: 'automatic-speech-recognition', label: 'STT', icon: '\ud83c\udfa4' },
-  { id: 'text-to-speech', label: 'TTS', icon: '\ud83d\udd0a' },
-  { id: '', label: 'All', icon: '\ud83d\udd0d' },
+  { id: 'text-generation', label: 'LLM', icon: Brain },
+  { id: 'image-text-to-text', label: 'Vision', icon: Camera },
+  { id: 'text-embedding', label: 'Embeddings', icon: LinkIcon },
+  { id: 'automatic-speech-recognition', label: 'STT', icon: Mic },
+  { id: 'text-to-speech', label: 'TTS', icon: Volume2 },
+  { id: '', label: 'All', icon: Search },
 ]
 
 const QUICK_MODELS = [
@@ -85,69 +91,71 @@ export default function ModelsPage() {
   }
 
   const modelCard = (id: string, extra: { label?: string; downloads?: number; likes?: number; task?: string; size?: number }) => (
-    <div key={id} className="glass rounded-xl p-4 hover:border-primary/50 transition-all duration-300 cursor-pointer group"
+    <Card key={id} className="hover:border-primary/50 transition-all duration-300 cursor-pointer group"
       onClick={() => setSelectedModel({ repo_id: id, model_name: extra.label || id, author: id.split('/')[0], downloads: extra.downloads || 0, likes: extra.likes || 0, pipeline_tag: extra.task, tags: [] } as HFModel)}>
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate group-hover:text-primary transition-colors">{id}</p>
-          {extra.label && <p className="text-xs text-text-muted mt-0.5">{extra.label}</p>}
+      <CardContent className="p-5 flex flex-col h-full">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1 min-w-0 pr-2">
+            <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors text-text">{id}</p>
+            {extra.label && <p className="text-xs text-text-muted mt-1">{extra.label}</p>}
+          </div>
+          {extra.task && <Badge variant="outline" className="shrink-0 text-[10px] uppercase">{extra.task}</Badge>}
         </div>
-        {extra.task && <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase font-semibold ml-2">{extra.task}</span>}
-      </div>
-      <div className="flex items-center gap-3 text-xs text-text-muted mb-3">
-        {extra.downloads !== undefined && <span>{'\u2b07'} {extra.downloads.toLocaleString()}</span>}
-        {extra.likes !== undefined && <span>{'\u2764'} {extra.likes}</span>}
-        {extra.size !== undefined && <span>{'\ud83d\udcbe'} {fmtSize(extra.size)}</span>}
-      </div>
-      <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
-        <button onClick={() => handleDownload(id)} disabled={downloading === id}
-          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition disabled:opacity-50">
-          {downloading === id ? 'Downloading...' : 'Download'}
-        </button>
-        <button onClick={() => handleDeploy(id)} disabled={deploying}
-          className="flex-1 px-2 py-1.5 text-xs rounded-lg bg-success/10 text-success hover:bg-success/20 transition disabled:opacity-50">
-          Deploy
-        </button>
-      </div>
-    </div>
+        
+        <div className="flex items-center gap-4 text-xs text-text-muted mb-5 mt-auto pt-2">
+          {extra.downloads !== undefined && <span className="flex items-center gap-1"><Download size={12} /> {extra.downloads.toLocaleString()}</span>}
+          {extra.likes !== undefined && <span className="flex items-center gap-1"><Heart size={12} /> {extra.likes}</span>}
+          {extra.size !== undefined && <span className="flex items-center gap-1"><HardDrive size={12} /> {fmtSize(extra.size)}</span>}
+        </div>
+        
+        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+          <Button size="sm" variant="secondary" onClick={() => handleDownload(id)} disabled={downloading === id} className="flex-1 text-xs h-8">
+            {downloading === id ? 'Downloading...' : 'Download'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleDeploy(id)} disabled={deploying} className="flex-1 text-xs h-8 border-success/30 text-success hover:bg-success/10">
+            Deploy
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
+    <div className="p-8 space-y-6 animate-in max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Model Hub</h1>
-          <p className="text-text-muted text-sm mt-0.5">Browse, download, and deploy models</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text">Model Hub</h1>
+          <p className="text-text-muted mt-1">Browse, download, and deploy models</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {deployMsg && (
-            <div className="glass rounded-xl px-4 py-2 text-sm animate-fade-in">
-              <span className={deployMsg.includes('Failed') ? 'text-danger' : 'text-success'}>{deployMsg}</span>
+            <div className="bg-surface border border-border rounded-lg px-4 py-2 text-sm shadow-sm animate-fade-in flex items-center gap-2">
+              {deployMsg.includes('Failed') ? <span className="text-danger">{deployMsg}</span> : <><Check className="w-4 h-4 text-success" /> <span className="text-success font-medium">{deployMsg}</span></>}
             </div>
           )}
-          <button onClick={handleRefresh}
-            className="px-4 py-2 rounded-xl glass hover:bg-surface-2 text-sm transition">
-            {'\ud83d\udd04'}
-          </button>
+          <Button variant="outline" size="icon" onClick={handleRefresh} title="Refresh">
+            <RefreshCw className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {['quick', 'hub', 'local'].map(t => (
-          <button key={t} onClick={() => setTab(t as typeof tab)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize ${
-              tab === t ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'glass hover:bg-surface-2'
-            }`}>
-            {t === 'quick' ? '\u26a1 Quick Deploy' : t === 'hub' ? '\ud83d\udd0d HuggingFace' : '\ud83d\uddc2\ufe0f Local'}
-          </button>
-        ))}
+        <Button variant={tab === 'quick' ? 'primary' : 'secondary'} onClick={() => setTab('quick')} className="gap-2">
+          <Zap className="w-4 h-4" /> Quick Deploy
+        </Button>
+        <Button variant={tab === 'hub' ? 'primary' : 'secondary'} onClick={() => setTab('hub')} className="gap-2">
+          <Database className="w-4 h-4" /> HuggingFace
+        </Button>
+        <Button variant={tab === 'local' ? 'primary' : 'secondary'} onClick={() => setTab('local')} className="gap-2">
+          <HardDrive className="w-4 h-4" /> Local
+        </Button>
       </div>
 
       {tab === 'quick' && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Recommended Models</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Recommended Models</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {QUICK_MODELS.map(m => modelCard(m.repo_id, { label: m.label, task: m.category, size: m.vram * 1e9 * 2 }))}
             </div>
           </div>
@@ -155,94 +163,110 @@ export default function ModelsPage() {
       )}
 
       {tab === 'hub' && (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">{'\ud83d\udd0d'}</span>
-              <input value={query} onChange={e => setQuery(e.target.value)}
+        <div className="space-y-6">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input 
+                icon={<Search className="w-4 h-4" />}
+                value={query} 
+                onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
-                placeholder="Search HuggingFace Hub..." />
+                placeholder="Search HuggingFace Hub (e.g. llama, mistral, whisper)..." 
+                className="h-11"
+              />
             </div>
-            <button onClick={handleSearch} disabled={searching}
-              className="px-5 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white rounded-xl text-sm font-medium transition shadow-lg shadow-primary/20">
+            <Button size="lg" onClick={handleSearch} disabled={searching} className="px-8">
               {searching ? 'Searching...' : 'Search'}
-            </button>
+            </Button>
           </div>
 
-          <div className="flex gap-1.5 flex-wrap">
-            {CATEGORIES.map(c => (
-              <button key={c.id} onClick={() => setCategory(c.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  category === c.id ? 'bg-secondary/20 text-secondary' : 'glass hover:bg-surface-2'
-                }`}>
-                {c.icon} {c.label}
-              </button>
-            ))}
+          <div className="flex gap-2 flex-wrap">
+            {CATEGORIES.map(c => {
+              const Icon = c.icon
+              return (
+                <Button 
+                  key={c.id} 
+                  variant={category === c.id ? 'primary' : 'outline'} 
+                  size="sm" 
+                  onClick={() => setCategory(c.id)}
+                  className={cn("gap-2 text-xs h-8", category === c.id ? "" : "border-border")}
+                >
+                  <Icon className="w-3 h-3" /> {c.label}
+                </Button>
+              )
+            })}
           </div>
 
           {results.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {results.map(m => modelCard(m.repo_id, {
                 label: m.model_name, downloads: m.downloads, likes: m.likes, task: m.pipeline_tag
               }))}
             </div>
           ) : searching ? (
-            <div className="grid grid-cols-3 gap-4">
-              {[1,2,3,4,5,6].map(i => <div key={i} className="shimmer h-32" />)}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-surface-2 animate-pulse h-40 rounded-xl" />)}
             </div>
           ) : (
-            <div className="glass rounded-2xl p-12 text-center">
-              <p className="text-4xl mb-3 opacity-40">{'\ud83d\udd0d'}</p>
-              <p className="text-text-muted">Search models from HuggingFace Hub</p>
-            </div>
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+                  <Search className="h-8 w-8 text-text-muted opacity-50" />
+                </div>
+                <h3 className="text-base font-semibold text-text">Search HuggingFace Hub</h3>
+                <p className="text-sm text-text-muted mt-1 max-w-sm">Enter a model name or keyword above to discover models from the HuggingFace community.</p>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
 
       {tab === 'local' && (
-        <div>
-          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Downloaded Models</h3>
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Downloaded Models</h3>
           {local.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {local.map(m => modelCard(m.repo_id, { size: m.size_bytes }))}
             </div>
           ) : (
-            <div className="glass rounded-2xl p-12 text-center">
-              <p className="text-4xl mb-3 opacity-40">{'\ud83d\udc04'}</p>
-              <p className="text-text-muted">No downloaded models yet</p>
-              <p className="text-xs text-text-muted mt-1">Use Quick Deploy or search HuggingFace</p>
-            </div>
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+                  <Inbox className="h-8 w-8 text-text-muted opacity-50" />
+                </div>
+                <h3 className="text-base font-semibold text-text">No downloaded models yet</h3>
+                <p className="text-sm text-text-muted mt-1 max-w-sm">Use Quick Deploy or search HuggingFace to download models for offline use.</p>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
 
       {selectedModel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedModel(null)}>
-          <div className="glass rounded-2xl p-6 max-w-md w-full mx-4 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="font-bold">{selectedModel.repo_id}</h3>
-                <p className="text-xs text-text-muted mt-0.5">{selectedModel.model_name || selectedModel.repo_id}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm p-4 animate-in" onClick={() => setSelectedModel(null)}>
+          <Card className="max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-text">{selectedModel.repo_id}</h3>
+                  <p className="text-sm text-text-muted mt-1">{selectedModel.model_name || selectedModel.repo_id}</p>
+                </div>
               </div>
-              <button onClick={() => setSelectedModel(null)} className="text-text-muted hover:text-text text-lg">{'\u2715'}</button>
-            </div>
-            <div className="flex gap-2 mb-4 text-xs text-text-muted">
-              <span>{'\u2b07'} {selectedModel.downloads.toLocaleString()} downloads</span>
-              <span>{'\u2764'} {selectedModel.likes}</span>
-              {selectedModel.pipeline_tag && <span className="px-2 py-0.5 rounded bg-primary/10 text-primary">{selectedModel.pipeline_tag}</span>}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => { handleDownload(selectedModel.repo_id); setSelectedModel(null) }}
-                className="flex-1 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-hover transition">
-                Download
-              </button>
-              <button onClick={() => { handleDeploy(selectedModel.repo_id); setSelectedModel(null) }}
-                className="flex-1 px-4 py-2 rounded-xl bg-success text-white text-sm font-medium hover:bg-success/90 transition">
-                Deploy Now
-              </button>
-            </div>
-          </div>
+              <div className="flex gap-4 mb-6 text-sm text-text-muted bg-surface-2 p-3 rounded-lg">
+                <span className="flex items-center gap-1.5"><Download size={14} /> {selectedModel.downloads.toLocaleString()}</span>
+                <span className="flex items-center gap-1.5"><Heart size={14} /> {selectedModel.likes}</span>
+                {selectedModel.pipeline_tag && <Badge variant="outline" className="ml-auto">{selectedModel.pipeline_tag}</Badge>}
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => { handleDownload(selectedModel.repo_id); setSelectedModel(null) }} className="flex-1">
+                  Download
+                </Button>
+                <Button onClick={() => { handleDeploy(selectedModel.repo_id); setSelectedModel(null) }} className="flex-1 bg-success hover:bg-success/90 text-white">
+                  Deploy Now
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

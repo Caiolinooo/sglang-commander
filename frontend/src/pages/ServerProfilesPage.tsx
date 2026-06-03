@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { listServerProfiles, createServerProfile, updateServerProfile, deleteServerProfile, activateServerProfile } from '../api/endpoints'
 import type { ServerProfile } from '../types'
+import { Server, Plus, Trash2, Edit2, CheckCircle2, Globe, ClipboardList, Check } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../components/ui/Button'
 
 export default function ServerProfilesPage() {
   const [profiles, setProfiles] = useState<ServerProfile[]>([])
@@ -24,50 +30,131 @@ export default function ServerProfilesPage() {
   const handleActivate = async (id: number) => { try { await activateServerProfile(id); await fetchProfiles() } catch {} }
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
+    <div className="p-8 space-y-6 animate-in max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Server Profiles</h1>
-          <p className="text-text-muted text-sm mt-0.5">Save and manage server configurations</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text">Server Profiles</h1>
+          <p className="text-text-muted mt-1">Save and manage server configurations</p>
         </div>
-        <button onClick={() => { resetForm(); setShowForm(true) }}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-white text-sm font-medium transition-all shadow-lg shadow-primary/20">+ New Profile</button>
+        <Button onClick={() => { resetForm(); setShowForm(true) }} className="gap-2">
+          <Plus className="w-4 h-4" /> New Profile
+        </Button>
       </div>
 
       {showForm && (
-        <div className="glass rounded-2xl p-5 space-y-3 animate-fade-in">
-          <h3 className="font-medium">{editing ? 'Edit Profile' : 'New Profile'}</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Profile name"
-              className="px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-            <input value={form.model_path} onChange={e => setForm(p => ({ ...p, model_path: e.target.value }))} placeholder="Model path (HF or local)"
-              className="px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-            <input value={form.host} onChange={e => setForm(p => ({ ...p, host: e.target.value }))} placeholder="Host"
-              className="px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-            <input type="number" value={form.port} onChange={e => setForm(p => ({ ...p, port: Number(e.target.value) }))} placeholder="Port"
-              className="px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-          </div>
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={form.is_remote} onChange={e => setForm(p => ({ ...p, is_remote: e.target.checked }))} className="accent-primary" /> Remote server</label>
-          {form.is_remote && <input value={form.remote_url} onChange={e => setForm(p => ({ ...p, remote_url: e.target.value }))} placeholder="Remote URL" className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />}
-          <div className="flex gap-2"><button onClick={handleSave} className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-hover transition">Save</button><button onClick={resetForm} className="px-5 py-2 rounded-xl glass text-sm">Cancel</button></div>
-        </div>
+        <Card className="animate-in slide-in-from-top-4">
+          <CardContent className="p-6 space-y-4">
+            <h3 className="font-semibold text-text text-lg border-b border-border pb-2">
+              {editing ? 'Edit Profile' : 'New Profile'}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-text-muted mb-1.5 block">Profile Name</label>
+                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Llama-3 Local" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-text-muted mb-1.5 block">Model Path (HF or local)</label>
+                <Input value={form.model_path} onChange={e => setForm(p => ({ ...p, model_path: e.target.value }))} placeholder="meta-llama/Llama-3.2-3B-Instruct" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-text-muted mb-1.5 block">Host</label>
+                <Input value={form.host} onChange={e => setForm(p => ({ ...p, host: e.target.value }))} placeholder="127.0.0.1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-text-muted mb-1.5 block">Port</label>
+                <Input type="number" value={form.port} onChange={e => setForm(p => ({ ...p, port: Number(e.target.value) }))} placeholder="30000" />
+              </div>
+            </div>
+            
+            <div className="pt-2">
+              <label className="flex items-center gap-2 text-sm text-text font-medium cursor-pointer w-fit">
+                <input 
+                  type="checkbox" 
+                  checked={form.is_remote} 
+                  onChange={e => setForm(p => ({ ...p, is_remote: e.target.checked }))} 
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 bg-surface" 
+                /> 
+                Remote Server
+              </label>
+            </div>
+            
+            {form.is_remote && (
+              <div className="animate-in fade-in zoom-in-95">
+                <label className="text-xs font-medium text-text-muted mb-1.5 block">Remote URL</label>
+                <Input value={form.remote_url} onChange={e => setForm(p => ({ ...p, remote_url: e.target.value }))} placeholder="https://api.example.com" />
+              </div>
+            )}
+            
+            <div className="flex gap-3 pt-4 justify-end border-t border-border mt-2">
+              <Button variant="secondary" onClick={resetForm}>Cancel</Button>
+              <Button onClick={handleSave} disabled={!form.name || !form.model_path} className="gap-2">
+                <Check className="w-4 h-4" /> Save Profile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-4">
         {profiles.map(p => (
-          <div key={p.id} className={`glass rounded-2xl p-4 ${p.is_active ? 'ring-2 ring-primary/50' : ''} flex items-center justify-between animate-fade-in`}>
-            <div>
-              <div className="flex items-center gap-2"><span className="font-medium text-sm">{p.name}</span>{p.is_active && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-semibold">active</span>}{p.is_remote && <span className="text-[10px] px-2 py-0.5 rounded-full bg-info/20 text-info font-semibold">remote</span>}</div>
-              <p className="text-xs text-text-muted mt-0.5">{p.model_path} &mdash; {p.host}:{p.port}</p>
-            </div>
-            <div className="flex gap-1.5">
-              <button onClick={() => handleActivate(p.id)} disabled={p.is_active} className="px-3 py-1.5 rounded-lg bg-success/20 text-success text-xs disabled:opacity-30 hover:bg-success/30 transition">Set Active</button>
-              <button onClick={() => handleEdit(p)} className="px-3 py-1.5 rounded-lg glass text-xs hover:bg-surface-2 transition">Edit</button>
-              <button onClick={() => handleDelete(p.id)} className="px-3 py-1.5 rounded-lg bg-danger/20 text-danger text-xs hover:bg-danger/30 transition">Delete</button>
-            </div>
-          </div>
+          <Card key={p.id} className={cn("overflow-hidden transition-all duration-300", p.is_active ? "border-primary/50 ring-1 ring-primary/20 shadow-md" : "hover:border-border-hover")}>
+            <CardContent className="p-0">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", p.is_active ? "bg-primary/10 text-primary" : "bg-surface-2 text-text-muted")}>
+                    <Server size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-text">{p.name}</span>
+                      {p.is_active && <Badge variant="default" className="text-[10px] uppercase tracking-wide gap-1 bg-primary text-white border-transparent"><CheckCircle2 className="w-3 h-3" /> Active</Badge>}
+                      {p.is_remote && <Badge variant="default" className="text-[10px] uppercase tracking-wide gap-1 text-info bg-info/10 border-info/20"><Globe className="w-3 h-3" /> Remote</Badge>}
+                    </div>
+                    <p className="text-sm text-text-muted mt-1 font-mono">
+                      <span className="text-text">{p.model_path}</span>
+                      <span className="mx-2 text-border">•</span>
+                      {p.host}:{p.port}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                  <Button 
+                    variant={p.is_active ? 'secondary' : 'outline'} 
+                    size="sm" 
+                    onClick={() => handleActivate(p.id)} 
+                    disabled={p.is_active} 
+                    className={cn("flex-1 sm:flex-none gap-2", p.is_active ? "opacity-50 cursor-not-allowed" : "text-success border-success/30 hover:bg-success/10")}
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> {p.is_active ? 'Active' : 'Set Active'}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(p)} className="h-9 w-9 text-text-muted hover:text-text">
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)} className="h-9 w-9 text-danger hover:bg-danger/10 hover:text-danger">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        {profiles.length === 0 && <div className="glass rounded-2xl p-12 text-center text-text-muted text-sm"><p className="text-3xl mb-2 opacity-40">{'\ud83d\udccb'}</p><p>No profiles yet. Create one to save server configurations.</p></div>}
+        
+        {profiles.length === 0 && !showForm && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="h-16 w-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+                <ClipboardList className="h-8 w-8 text-text-muted opacity-50" />
+              </div>
+              <h3 className="text-lg font-semibold text-text">No profiles yet</h3>
+              <p className="text-sm text-text-muted mt-1 max-w-sm mb-6">Create a profile to easily switch between different server configurations and models.</p>
+              <Button onClick={() => setShowForm(true)} className="gap-2">
+                <Plus className="w-4 h-4" /> Create First Profile
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

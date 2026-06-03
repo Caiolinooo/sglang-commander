@@ -1,27 +1,30 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getServerStatus, getLatestMetrics, listLocalModels } from '../api/endpoints'
 import type { ServerStatus } from '../types'
+import { Zap, Activity, HardDrive, Thermometer, Clock, Database, Gauge, Hash, Server, Box, Inbox } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../components/ui/Button'
 
-function StatCard({ label, value, unit, color, icon, trend }: {
+function StatCard({ label, value, unit, icon: Icon, colorClass }: {
   label: string; value: string | number | undefined; unit?: string;
-  color?: string; icon?: string; trend?: 'up' | 'down' | 'stable'
+  icon?: any; colorClass?: string;
 }) {
-  const trendIcon = trend === 'up' ? '\u2191' : trend === 'down' ? '\u2193' : ''
-  const trendColor = trend === 'up' ? 'var(--color-success)' : trend === 'down' ? 'var(--color-danger)' : 'var(--color-text-muted)'
   return (
-    <div className="glass rounded-2xl p-5 animate-fade-in hover:scale-[1.02] transition-all duration-300 cursor-default">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-text-muted uppercase tracking-wider">{label}</span>
-        {icon && <span className="text-lg opacity-60">{icon}</span>}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-3xl font-bold" style={{ color: color || 'var(--color-text)' }}>
-          {value !== undefined && value !== null ? value : '--'}
-        </span>
-        {unit && <span className="text-sm text-text-muted">{unit}</span>}
-        {trendIcon && <span className="text-xs ml-2" style={{ color: trendColor }}>{trendIcon}</span>}
-      </div>
-    </div>
+    <Card className="hover:border-border-hover transition-colors">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">{label}</span>
+          {Icon && <Icon className={cn("h-4 w-4 text-text-muted", colorClass)} />}
+        </div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-3xl font-bold tracking-tight text-text">
+            {value !== undefined && value !== null ? value : '--'}
+          </span>
+          {unit && <span className="text-sm font-medium text-text-muted">{unit}</span>}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -53,75 +56,86 @@ export default function Dashboard() {
 
   const running = status.running
   const health = status.health || 'stopped'
-  const dotClass = running ? (health === 'healthy' ? 'running' : 'warning') : 'stopped'
   const uptimeSecs = status.uptime_seconds
   const uptime = uptimeSecs ? `${Math.floor(uptimeSecs / 60)}m ${Math.floor(uptimeSecs % 60)}s` : '--'
 
   const fmt = (v: number | undefined, d = 1) => v !== undefined && v !== null ? v.toFixed(d) : '--'
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
+    <div className="p-8 space-y-8 animate-in max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">{greeting}, Commander</h1>
-          <p className="text-text-muted text-sm mt-0.5">Your SGLang inference hub</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text">{greeting}, Commander</h1>
+          <p className="text-text-muted mt-1">Your SGLang inference hub overview</p>
         </div>
-        <div className="flex items-center gap-3 glass rounded-xl px-4 py-2.5">
-          <span className={`status-dot ${dotClass}`} />
+        <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3 shadow-sm">
+          <span className={cn("relative flex h-3 w-3", running ? "" : "opacity-50")}>
+            {running && health === 'healthy' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>}
+            <span className={cn("relative inline-flex rounded-full h-3 w-3", running ? (health === 'healthy' ? 'bg-success' : 'bg-warning') : 'bg-text-muted')}></span>
+          </span>
           <div>
-            <p className="text-sm font-medium">{running ? 'Server Active' : 'Server Offline'}</p>
-            <p className="text-xs text-text-muted">{running ? health : 'Start a server to begin'}</p>
+            <p className="text-sm font-semibold leading-none">{running ? 'Server Active' : 'Server Offline'}</p>
+            <p className="text-xs text-text-muted mt-1">{running ? health : 'Start a server to begin'}</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="GPU Utilization" value={fmt(metrics.gpu_util)} unit="%" color="#22c55e" icon={'\u26a1'} />
-        <StatCard label="Throughput" value={fmt(metrics.gen_throughput)} unit="tok/s" color="#a855f7" icon={'\u21c4'} trend="up" />
-        <StatCard label="VRAM" value={metrics.gpu_mem_used_mb ? (metrics.gpu_mem_used_mb / 1024).toFixed(1) : '--'} unit="GB" color="#6366f1" icon={'\ud83d\udcbe'} />
-        <StatCard label="GPU Temp" value={fmt(metrics.gpu_temp_c)} unit="\u00b0C" color="#f43f5e" icon={'\ud83d\udd25'} />
-        <StatCard label="Queue Depth" value={fmt(metrics.num_queue_reqs, 0)} color="#eab308" icon={'\u231b'} />
-        <StatCard label="Cache Hit Rate" value={metrics.cache_hit_rate ? (metrics.cache_hit_rate * 100).toFixed(1) : '--'} unit="%" color="#06b6d4" icon={'\ud83d\udca5'} />
-        <StatCard label="Avg Latency" value={fmt(metrics.e2e_latency_avg_ms)} unit="ms" color="#f97316" icon={'\u23f1\ufe0f'} />
-        <StatCard label="Request Count" value={fmt(metrics.num_running_reqs, 0)} color="#14b8a6" icon={'\ud83d\udce8'} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="GPU Utilization" value={fmt(metrics.gpu_util)} unit="%" icon={Zap} colorClass="text-success" />
+        <StatCard label="Throughput" value={fmt(metrics.gen_throughput)} unit="tok/s" icon={Activity} colorClass="text-primary" />
+        <StatCard label="VRAM" value={metrics.gpu_mem_used_mb ? (metrics.gpu_mem_used_mb / 1024).toFixed(1) : '--'} unit="GB" icon={HardDrive} />
+        <StatCard label="GPU Temp" value={fmt(metrics.gpu_temp_c)} unit="°C" icon={Thermometer} colorClass="text-danger" />
+        <StatCard label="Queue Depth" value={fmt(metrics.num_queue_reqs, 0)} icon={Clock} colorClass="text-warning" />
+        <StatCard label="Cache Hit Rate" value={metrics.cache_hit_rate ? (metrics.cache_hit_rate * 100).toFixed(1) : '--'} unit="%" icon={Database} colorClass="text-info" />
+        <StatCard label="Avg Latency" value={fmt(metrics.e2e_latency_avg_ms)} unit="ms" icon={Gauge} />
+        <StatCard label="Request Count" value={fmt(metrics.num_running_reqs, 0)} icon={Hash} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass rounded-2xl p-5">
-          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Server Info</h3>
-          <div className="space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Server className="h-5 w-5 text-primary" /> Server Info</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {[
               ['Model', status.model_path || 'Not loaded'],
               ['Host', status.host ? `${status.host}:${status.port}` : '--'],
               ['PID', status.pid?.toString() || '--'],
               ['Uptime', uptime],
             ].map(([k, v]) => (
-              <div key={k} className="flex justify-between items-center py-1.5 border-b border-border/40 last:border-0">
-                <span className="text-sm text-text-muted">{k}</span>
-                <span className="text-sm font-medium">{v}</span>
+              <div key={k} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0 last:pb-0">
+                <span className="text-sm font-medium text-text-muted">{k}</span>
+                <span className="text-sm font-semibold text-text">{v}</span>
               </div>
             ))}
-          </div>
-        </div>
-        <div className="glass rounded-2xl p-5">
-          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">Local Models</h3>
-          {localModels.length > 0 ? (
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {localModels.slice(0, 8).map((m) => (
-                <div key={m.repo_id} className="flex justify-between items-center py-1.5 border-b border-border/40 last:border-0">
-                  <span className="text-sm truncate pr-2">{m.repo_id}</span>
-                  <span className="text-xs text-text-muted shrink-0">{(m.size_bytes / 1e9).toFixed(1)} GB</span>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5 text-primary" /> Local Models</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {localModels.length > 0 ? (
+              <div className="space-y-1">
+                {localModels.slice(0, 6).map((m) => (
+                  <div key={m.repo_id} className="flex justify-between items-center py-2.5 border-b border-border/50 last:border-0 last:pb-0">
+                    <span className="text-sm font-medium text-text truncate pr-4">{m.repo_id}</span>
+                    <Badge variant="outline">{(m.size_bytes / 1e9).toFixed(1)} GB</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="h-12 w-12 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+                  <Inbox className="h-6 w-6 text-text-muted" />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-text-muted">
-              <span className="text-3xl mb-2 opacity-40">{'\ud83d\udc04'}</span>
-              <p className="text-sm">No local models found</p>
-              <p className="text-xs mt-1">Download models from the Models page</p>
-            </div>
-          )}
-        </div>
+                <h3 className="text-sm font-semibold text-text">No local models</h3>
+                <p className="text-sm text-text-muted mt-1">Download models from the Models page to get started.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

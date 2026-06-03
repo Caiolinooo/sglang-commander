@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
 import { getZTStatus, joinZTNetwork, leaveZTNetwork, createApiKey, listApiKeys } from '../api/endpoints'
+import { Network, Key, Plus, Trash2, Globe, Activity, Copy, Check } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
 
 export default function DeployPage() {
   const [zt, setZt] = useState<{ installed: boolean; running: boolean; node_id?: string; online: boolean; networks: Array<{ network_id: string; name: string; status: string; assigned_ips: string[] }> }>({ installed: false, running: false, online: false, networks: [] })
@@ -7,6 +12,7 @@ export default function DeployPage() {
   const [keyName, setKeyName] = useState('')
   const [keys, setKeys] = useState<Array<{ id: number; name: string; key: string; scopes: string }>>([])
   const [newKey, setNewKey] = useState('')
+  const [copiedKey, setCopiedKey] = useState(false)
 
   useEffect(() => { refresh() }, [])
 
@@ -17,62 +23,167 @@ export default function DeployPage() {
 
   const handleCreateKey = async () => { if (!keyName.trim()) return; try { const r = await createApiKey(keyName); setNewKey(r.data.key || ''); setKeyName(''); refresh() } catch {} }
 
-  return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      <h1 className="text-2xl font-bold gradient-text">Deploy & Remote Access</h1>
+  const handleCopyKey = () => {
+    if (!newKey) return
+    navigator.clipboard.writeText(newKey)
+    setCopiedKey(true)
+    setTimeout(() => setCopiedKey(false), 2000)
+  }
 
-      <div className="glass rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">ZeroTier Status</h3>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${zt.online ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'}`}>
-            {zt.online ? 'Online' : 'Offline'}
-          </span>
-        </div>
-        <div className="space-y-2 text-sm">
-          <p><span className="text-text-muted">Node ID:</span> {zt.node_id || 'N/A'}</p>
-          <p><span className="text-text-muted">Networks:</span> {zt.networks.length}</p>
-          {zt.networks.map(n => (
-            <div key={n.network_id} className="glass rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium">{n.name || n.network_id}</p>
-                <p className="text-[10px] text-text-muted">{n.assigned_ips.join(', ') || 'No IP'}</p>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded ${n.status === 'OK' ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>{n.status}</span>
-              <button onClick={() => handleLeave(n.network_id)} className="text-[10px] text-danger hover:underline">Leave</button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-3">
-          <input value={netId} onChange={e => setNetId(e.target.value)} placeholder="Network ID"
-            className="flex-1 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-          <button onClick={handleJoin} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-hover transition">Join</button>
-        </div>
+  return (
+    <div className="p-8 space-y-6 animate-in max-w-5xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-text">Deploy & Remote Access</h1>
+        <p className="text-text-muted mt-1">Manage ZeroTier networks and API keys for remote access</p>
       </div>
 
-      <div className="glass rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">API Keys</h3>
-        <div className="space-y-2">
-          {keys.map(k => (
-            <div key={k.id} className="flex items-center justify-between glass rounded-xl p-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Network className="w-5 h-5 text-primary" />
+                <CardTitle>ZeroTier Network</CardTitle>
+              </div>
+              <Badge variant={zt.online ? 'success' : 'danger'} className="flex items-center gap-1.5">
+                <Activity className="w-3 h-3" />
+                {zt.online ? 'Online' : 'Offline'}
+              </Badge>
+            </div>
+            <CardDescription>
+              Connect to virtual networks for secure remote access
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-surface-2 rounded-xl p-4 border border-border flex justify-between items-center">
               <div>
-                <p className="text-xs font-medium">{k.name}</p>
-                <p className="text-[10px] text-text-muted font-mono">{k.key.slice(0, 20)}... | {k.scopes}</p>
+                <p className="text-xs text-text-muted font-medium mb-1">Node ID</p>
+                <p className="font-mono text-sm">{zt.node_id || 'N/A'}</p>
+              </div>
+              <Globe className="w-8 h-8 text-text-muted opacity-50" />
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text flex items-center gap-2">
+                Active Networks <Badge variant="default">{zt.networks.length}</Badge>
+              </h4>
+              
+              {zt.networks.length === 0 ? (
+                <div className="text-center py-6 bg-surface-2 rounded-xl border border-dashed border-border">
+                  <p className="text-sm text-text-muted">Not connected to any networks</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {zt.networks.map(n => (
+                    <div key={n.network_id} className="bg-surface border border-border rounded-xl p-3 flex items-center justify-between group">
+                      <div>
+                        <p className="text-sm font-medium text-text">{n.name || n.network_id}</p>
+                        <p className="text-xs text-text-muted mt-0.5 font-mono">{n.assigned_ips.join(', ') || 'No IP assigned'}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={n.status === 'OK' ? 'success' : 'warning'} className="text-[10px]">
+                          {n.status}
+                        </Badge>
+                        <Button variant="ghost" size="icon" onClick={() => handleLeave(n.network_id)} className="h-8 w-8 text-danger hover:bg-danger/10 hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-border">
+              <p className="text-sm font-medium text-text mb-2">Join Network</p>
+              <div className="flex gap-2">
+                <Input 
+                  value={netId} 
+                  onChange={e => setNetId(e.target.value)} 
+                  placeholder="Enter Network ID (16 chars)"
+                  className="flex-1 font-mono text-sm"
+                />
+                <Button onClick={handleJoin} disabled={!netId.trim()} className="gap-2 shrink-0">
+                  <Plus className="w-4 h-4" /> Join
+                </Button>
               </div>
             </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-3">
-          <input value={keyName} onChange={e => setKeyName(e.target.value)} placeholder="Key name"
-            className="flex-1 px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
-          <button onClick={handleCreateKey} className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-hover transition">Create</button>
-        </div>
-        {newKey && (
-          <div className="mt-3 glass rounded-xl p-3 animate-fade-in">
-            <p className="text-xs text-success font-medium">New API Key (copy now):</p>
-            <p className="text-xs font-mono mt-1 break-all bg-bg p-2 rounded">{newKey}</p>
-          </div>
-        )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-primary" />
+              <CardTitle>API Keys</CardTitle>
+            </div>
+            <CardDescription>
+              Manage authentication keys for API access
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text flex items-center gap-2">
+                Active Keys <Badge variant="default">{keys.length}</Badge>
+              </h4>
+              
+              {keys.length === 0 ? (
+                <div className="text-center py-6 bg-surface-2 rounded-xl border border-dashed border-border">
+                  <p className="text-sm text-text-muted">No API keys created</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {keys.map(k => (
+                    <div key={k.id} className="flex items-center justify-between bg-surface border border-border rounded-xl p-3">
+                      <div className="min-w-0 pr-4">
+                        <p className="text-sm font-medium text-text truncate">{k.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-text-muted font-mono truncate">{k.key.slice(0, 8)}...{k.key.slice(-4)}</p>
+                          <span className="text-[10px] bg-surface-2 px-1.5 py-0.5 rounded text-text-muted">{k.scopes}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-border">
+              <p className="text-sm font-medium text-text mb-2">Create New Key</p>
+              <div className="flex gap-2">
+                <Input 
+                  value={keyName} 
+                  onChange={e => setKeyName(e.target.value)} 
+                  placeholder="e.g., Python Script, Web App"
+                  className="flex-1 text-sm"
+                />
+                <Button onClick={handleCreateKey} disabled={!keyName.trim()} className="gap-2 shrink-0 bg-secondary hover:bg-secondary-hover text-white">
+                  <Plus className="w-4 h-4" /> Create
+                </Button>
+              </div>
+              
+              {newKey && (
+                <div className="mt-4 bg-success/10 border border-success/20 rounded-xl p-4 animate-in slide-in-from-bottom-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-success font-medium flex items-center gap-1.5">
+                      <Check className="w-4 h-4" /> New API Key Created
+                    </p>
+                    <Badge variant="outline" className="text-[10px] text-success border-success/30">Save this now!</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-mono break-all bg-bg/50 p-2.5 rounded-lg flex-1 border border-success/20 select-all">{newKey}</p>
+                    <Button variant="outline" size="icon" onClick={handleCopyKey} className="shrink-0 h-9 w-9 border-success/30 text-success hover:bg-success/20">
+                      {copiedKey ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-success/80 mt-2">You won't be able to see this key again.</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
+

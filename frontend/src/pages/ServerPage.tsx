@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { startServer, stopServer, restartServer, getServerStatus, getServerLogs, listServerProfiles, getActiveProfile } from '../api/endpoints'
 import type { ServerProfile } from '../types'
+import { Cpu, Sparkles, Brain, FlaskConical, Waves, Play, Square, RotateCw, Settings, FileText, Search, Shield, MonitorSpeaker } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../components/ui/Button'
 
 const MODEL_PRESETS = [
-  { id: 'llama3.1-8b', name: 'Llama 3.1 8B', path: 'meta-llama/Llama-3.1-8B-Instruct', icon: '🦙', desc: 'General purpose, fast', quant: '', ctx: 8192 },
-  { id: 'llama3.1-70b', name: 'Llama 3.1 70B', path: 'meta-llama/Llama-3.1-70B-Instruct', icon: '🦙', desc: 'High quality, needs VRAM', quant: 'awq', ctx: 8192 },
-  { id: 'qwen2.5-7b', name: 'Qwen 2.5 7B', path: 'Qwen/Qwen2.5-7B-Instruct', icon: '💎', desc: 'Multilingual, coding', quant: '', ctx: 32768 },
-  { id: 'qwen2.5-72b', name: 'Qwen 2.5 72B', path: 'Qwen/Qwen2.5-72B-Instruct', icon: '💎', desc: 'Top-tier, needs 2+ GPUs', quant: 'awq', ctx: 32768 },
-  { id: 'deepseek-v3', name: 'DeepSeek V3', path: 'deepseek-ai/DeepSeek-V3-0324', icon: '🔮', desc: 'MoE, excellent reasoning', quant: 'fp8', ctx: 16384 },
-  { id: 'phi-4', name: 'Phi-4 14B', path: 'microsoft/phi-4', icon: '🔬', desc: 'Compact, Microsoft research', quant: '', ctx: 16384 },
-  { id: 'mistral-nemo', name: 'Mistral Nemo', path: 'mistralai/Mistral-Nemo-Instruct-2407', icon: '🌊', desc: 'Fast 12B, multilingual', quant: '', ctx: 128000 },
-  { id: 'gemma2-9b', name: 'Gemma 2 9B', path: 'google/gemma-2-9b-it', icon: '💎', desc: 'Google, efficient', quant: '', ctx: 8192 },
+  { id: 'llama3.1-8b', name: 'Llama 3.1 8B', path: 'meta-llama/Llama-3.1-8B-Instruct', icon: Cpu, desc: 'General purpose, fast', quant: '', ctx: 8192 },
+  { id: 'llama3.1-70b', name: 'Llama 3.1 70B', path: 'meta-llama/Llama-3.1-70B-Instruct', icon: Cpu, desc: 'High quality, needs VRAM', quant: 'awq', ctx: 8192 },
+  { id: 'qwen2.5-7b', name: 'Qwen 2.5 7B', path: 'Qwen/Qwen2.5-7B-Instruct', icon: Sparkles, desc: 'Multilingual, coding', quant: '', ctx: 32768 },
+  { id: 'qwen2.5-72b', name: 'Qwen 2.5 72B', path: 'Qwen/Qwen2.5-72B-Instruct', icon: Sparkles, desc: 'Top-tier, needs 2+ GPUs', quant: 'awq', ctx: 32768 },
+  { id: 'deepseek-v3', name: 'DeepSeek V3', path: 'deepseek-ai/DeepSeek-V3-0324', icon: Brain, desc: 'MoE, excellent reasoning', quant: 'fp8', ctx: 16384 },
+  { id: 'phi-4', name: 'Phi-4 14B', path: 'microsoft/phi-4', icon: FlaskConical, desc: 'Compact, Microsoft research', quant: '', ctx: 16384 },
+  { id: 'mistral-nemo', name: 'Mistral Nemo', path: 'mistralai/Mistral-Nemo-Instruct-2407', icon: Waves, desc: 'Fast 12B, multilingual', quant: '', ctx: 128000 },
+  { id: 'gemma2-9b', name: 'Gemma 2 9B', path: 'google/gemma-2-9b-it', icon: Sparkles, desc: 'Google, efficient', quant: '', ctx: 8192 },
 ]
 
 const QUANT_OPTIONS = [
@@ -90,240 +96,260 @@ export default function ServerPage() {
   const handleRestart = async () => { try { await restartServer() } catch {} }
 
   const uptime = status.uptime_seconds ? `${Math.floor(status.uptime_seconds / 60)}m ${Math.floor(status.uptime_seconds % 60)}s` : '--'
-  const dotClass = status.running ? (status.health === 'healthy' ? 'running' : 'warning') : 'stopped'
   const update = (f: string, v: unknown) => setConfig(p => ({ ...p, [f]: v }))
 
   return (
-    <div className="p-6 space-y-5 animate-fade-in">
-      {/* Header */}
+    <div className="p-8 space-y-6 animate-in max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">Server Control</h1>
-          <p className="text-text-muted text-sm mt-0.5">Configure and launch your SGLang server</p>
+          <h1 className="text-3xl font-bold tracking-tight text-text">Server Control</h1>
+          <p className="text-text-muted mt-1">Configure and launch your SGLang server</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 glass rounded-xl px-4 py-2.5">
-            <span className={`status-dot ${dotClass}`} />
-            <div>
-              <p className="text-xs font-semibold">{status.running ? 'Running' : 'Stopped'}</p>
-              {status.running && <p className="text-[10px] text-text-muted">{uptime} | {status.model_path.split('/').pop()}</p>}
-            </div>
+        <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3 shadow-sm">
+          <span className={cn("relative flex h-3 w-3", status.running ? "" : "opacity-50")}>
+            {status.running && status.health === 'healthy' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>}
+            <span className={cn("relative inline-flex rounded-full h-3 w-3", status.running ? (status.health === 'healthy' ? 'bg-success' : 'bg-warning') : 'bg-text-muted')}></span>
+          </span>
+          <div>
+            <p className="text-sm font-semibold leading-none">{status.running ? 'Running' : 'Stopped'}</p>
+            {status.running && <p className="text-xs text-text-muted mt-1">{uptime} | {status.model_path.split('/').pop()}</p>}
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2">
-        {(['config', 'logs'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize ${
-              tab === t ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'glass hover:bg-surface-2'
-            }`}>
-            {t === 'config' ? '\u2699\ufe0f Configuration' : '\ud83d\udcdd Logs'}
-          </button>
-        ))}
+        <Button variant={tab === 'config' ? 'primary' : 'secondary'} onClick={() => setTab('config')}>
+          <Settings className="w-4 h-4 mr-2" /> Configuration
+        </Button>
+        <Button variant={tab === 'logs' ? 'primary' : 'secondary'} onClick={() => setTab('logs')}>
+          <FileText className="w-4 h-4 mr-2" /> Logs
+        </Button>
       </div>
 
       {tab === 'config' && (
-        <div className="space-y-5">
-          {/* Model Presets */}
-          <div className="glass rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Quick Select Model</h3>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-semibold text-text-muted uppercase tracking-wider">Quick Select Model</CardTitle>
               {selectedPreset && (
                 <button onClick={() => { setSelectedPreset(null); setConfig(p => ({ ...p, model_path: '' })) }}
-                  className="text-xs text-primary hover:underline">
+                  className="text-xs text-primary hover:underline font-medium">
                   Clear selection
                 </button>
               )}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {MODEL_PRESETS.map(preset => (
-                <button key={preset.id} onClick={() => selectPreset(preset)}
-                  className={`glass rounded-xl p-3 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 ${
-                    selectedPreset === preset.id ? 'ring-2 ring-primary/60 bg-primary/5' : 'hover:bg-surface-2'
-                  }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">{preset.icon}</span>
-                    <span className="text-sm font-medium truncate">{preset.name}</span>
-                  </div>
-                  <p className="text-[10px] text-text-muted truncate">{preset.desc}</p>
-                  <p className="text-[10px] text-text-muted font-mono mt-1 truncate">{preset.path}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom Model Input */}
-          <div className="glass rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Or Enter Model Path</h3>
-            <div className="relative" ref={modelInputRef}>
-              <input
-                value={config.model_path}
-                onChange={e => { setConfig(p => ({ ...p, model_path: e.target.value })); setSelectedPreset(null); setShowModelDropdown(true) }}
-                onFocus={() => setShowModelDropdown(true)}
-                placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct or /path/to/local/model"
-                className="w-full px-4 py-3 rounded-xl glass border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
-              />
-              {showModelDropdown && filteredModels.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 glass rounded-xl border border-border shadow-xl max-h-48 overflow-y-auto">
-                  {filteredModels.map(m => (
-                    <button key={m.id} onClick={() => selectPreset(m)}
-                      className="w-full px-4 py-2.5 text-left hover:bg-primary/10 transition text-sm flex items-center gap-2">
-                      <span>{m.icon}</span>
-                      <div>
-                        <p className="font-medium">{m.name}</p>
-                        <p className="text-[10px] text-text-muted">{m.desc}</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {MODEL_PRESETS.map(preset => {
+                  const Icon = preset.icon
+                  const isSelected = selectedPreset === preset.id
+                  return (
+                    <button key={preset.id} onClick={() => selectPreset(preset)}
+                      className={cn(
+                        "flex flex-col items-start p-3 rounded-lg border transition-all text-left",
+                        isSelected 
+                          ? "border-primary bg-primary/10 ring-1 ring-primary/50" 
+                          : "border-border bg-surface hover:border-border-hover hover:bg-surface-2"
+                      )}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={cn("h-4 w-4", isSelected ? "text-primary" : "text-text-muted")} />
+                        <span className="text-sm font-semibold text-text truncate">{preset.name}</span>
                       </div>
+                      <p className="text-xs text-text-muted truncate w-full">{preset.desc}</p>
+                      <p className="text-[10px] text-text-muted font-mono mt-1.5 truncate w-full opacity-60">{preset.path}</p>
                     </button>
-                  ))}
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-text-muted uppercase tracking-wider">Or Enter Model Path</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative" ref={modelInputRef}>
+                <Input
+                  icon={<Search className="h-4 w-4" />}
+                  value={config.model_path}
+                  onChange={e => { setConfig(p => ({ ...p, model_path: e.target.value })); setSelectedPreset(null); setShowModelDropdown(true); setModelSearch(e.target.value) }}
+                  onFocus={() => setShowModelDropdown(true)}
+                  placeholder="e.g. meta-llama/Llama-3.1-8B-Instruct or /path/to/local/model"
+                  className="h-11"
+                />
+                {showModelDropdown && filteredModels.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-surface-2 border border-border rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                    {filteredModels.map(m => {
+                      const Icon = m.icon
+                      return (
+                        <button key={m.id} onClick={() => selectPreset(m)}
+                          className="w-full px-4 py-3 text-left hover:bg-border-hover transition-colors flex items-center gap-3 border-b border-border/50 last:border-0">
+                          <Icon className="h-4 w-4 text-text-muted" />
+                          <div>
+                            <p className="text-sm font-medium text-text">{m.name}</p>
+                            <p className="text-xs text-text-muted">{m.desc}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-text-muted uppercase tracking-wider">Server Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Host</label>
+                  <Input value={config.host} onChange={e => update('host', e.target.value)} placeholder="127.0.0.1" />
                 </div>
-              )}
-            </div>
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Port</label>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min={1024} max={65535} value={config.port} onChange={e => update('port', Number(e.target.value))}
+                      className="flex-1" />
+                    <Input type="number" value={config.port} onChange={e => update('port', Number(e.target.value))} className="w-24 text-center" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Tensor Parallel</label>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min={1} max={8} value={config.tensor_parallel_size} onChange={e => update('tensor_parallel_size', Number(e.target.value))}
+                      className="flex-1" />
+                    <span className="text-sm font-mono font-medium bg-surface-2 px-3 py-1.5 rounded-md border border-border w-12 text-center">{config.tensor_parallel_size}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-text-muted uppercase tracking-wider">Model Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Quantization</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {QUANT_OPTIONS.slice(0, 3).map(o => (
+                      <button key={o.value} onClick={() => update('quantization', o.value)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-xs font-medium transition-colors border",
+                          config.quantization === o.value ? "bg-primary text-white border-primary" : "bg-surface-2 text-text border-border hover:bg-border-hover"
+                        )}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Dtype</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {DTYPE_OPTIONS.map(d => (
+                      <button key={d} onClick={() => update('dtype', d)}
+                        className={cn(
+                          "px-2 py-1.5 rounded-md text-xs font-medium transition-colors border",
+                          config.dtype === d ? "bg-primary text-white border-primary" : "bg-surface-2 text-text border-border hover:bg-border-hover"
+                        )}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-muted mb-1.5 block">Context Length</label>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min={0} max={131072} step={1024} value={config.context_length} onChange={e => update('context_length', Number(e.target.value))}
+                      className="flex-1" />
+                    <span className="text-sm font-mono font-medium bg-surface-2 px-3 py-1.5 rounded-md border border-border w-16 text-center">
+                      {config.context_length === 0 ? 'auto' : `${Math.round(config.context_length / 1024)}K`}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Server Settings */}
-          <div className="glass rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Server Settings</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs text-text-muted">Host</label>
-                <input value={config.host} onChange={e => update('host', e.target.value)}
-                  className="w-full mt-1.5 px-3 py-2.5 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition"
-                  placeholder="127.0.0.1" />
-              </div>
-              <div>
-                <label className="text-xs text-text-muted">Port</label>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <input type="range" min={1024} max={65535} value={config.port} onChange={e => update('port', Number(e.target.value))}
-                    className="flex-1 accent-primary" />
-                  <input type="number" value={config.port} onChange={e => update('port', Number(e.target.value))}
-                    className="w-20 px-2 py-2 rounded-lg bg-bg border border-border text-sm text-center" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-text-muted">Tensor Parallel</label>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <input type="range" min={1} max={8} value={config.tensor_parallel_size} onChange={e => update('tensor_parallel_size', Number(e.target.value))}
-                    className="flex-1 accent-primary" />
-                  <span className="text-sm font-mono w-8 text-center">{config.tensor_parallel_size}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Model Settings */}
-          <div className="glass rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Model Settings</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs text-text-muted">Quantization</label>
-                <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-                  {QUANT_OPTIONS.map(o => (
-                    <button key={o.value} onClick={() => update('quantization', o.value)}
-                      className={`px-2 py-1.5 rounded-lg text-xs transition ${
-                        config.quantization === o.value ? 'bg-primary text-white' : 'glass hover:bg-surface-2'
-                      }`}>
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-text-muted">Dtype</label>
-                <div className="flex gap-1.5 mt-1.5">
-                  {DTYPE_OPTIONS.map(d => (
-                    <button key={d} onClick={() => update('dtype', d)}
-                      className={`flex-1 px-2 py-1.5 rounded-lg text-xs transition ${
-                        config.dtype === d ? 'bg-primary text-white' : 'glass hover:bg-surface-2'
-                      }`}>
-                      {d}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-text-muted">Context Length</label>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <input type="range" min={0} max={131072} step={1024} value={config.context_length} onChange={e => update('context_length', Number(e.target.value))}
-                    className="flex-1 accent-primary" />
-                  <span className="text-sm font-mono w-16 text-right">{config.context_length === 0 ? 'auto' : `${Math.round(config.context_length / 1024)}K`}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Toggles */}
-            <div className="flex gap-6 mt-4 pt-4 border-t border-border/50">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-10 h-5 rounded-full transition-colors relative ${config.enable_multimodal ? 'bg-primary' : 'bg-surface-3'}`}
+          <Card>
+            <CardContent className="p-4 flex gap-8">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={cn("w-10 h-5 rounded-full transition-colors relative", config.enable_multimodal ? "bg-primary" : "bg-surface-2 border border-border")}
                   onClick={() => update('enable_multimodal', !config.enable_multimodal)}>
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${config.enable_multimodal ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm", config.enable_multimodal ? "translate-x-5" : "translate-x-0.5")} />
                 </div>
-                <span className="text-xs group-hover:text-primary transition-colors">Multimodal (Vision/Audio)</span>
+                <span className="text-sm font-medium text-text group-hover:text-primary transition-colors flex items-center gap-2">
+                  <MonitorSpeaker className="h-4 w-4" /> Multimodal
+                </span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-10 h-5 rounded-full transition-colors relative ${config.trust_remote_code ? 'bg-primary' : 'bg-surface-3'}`}
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={cn("w-10 h-5 rounded-full transition-colors relative", config.trust_remote_code ? "bg-primary" : "bg-surface-2 border border-border")}
                   onClick={() => update('trust_remote_code', !config.trust_remote_code)}>
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${config.trust_remote_code ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm", config.trust_remote_code ? "translate-x-5" : "translate-x-0.5")} />
                 </div>
-                <span className="text-xs group-hover:text-primary transition-colors">Trust Remote Code</span>
+                <span className="text-sm font-medium text-text group-hover:text-primary transition-colors flex items-center gap-2">
+                  <Shield className="h-4 w-4" /> Trust Remote Code
+                </span>
               </label>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Profiles */}
           {profiles.length > 0 && (
-            <div className="glass rounded-2xl p-5">
-              <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-3">Saved Profiles</h3>
-              <div className="flex gap-2 flex-wrap">
-                {profiles.map(p => (
-                  <button key={p.id} onClick={() => loadProfile(p)}
-                    className={`glass rounded-xl px-4 py-2 text-sm transition hover:bg-surface-2 ${activeProfile?.id === p.id ? 'ring-2 ring-primary/40' : ''}`}>
-                    <span className="font-medium">{p.name}</span>
-                    {p.is_remote && <span className="ml-1.5 text-[10px] text-info">remote</span>}
-                    {activeProfile?.id === p.id && <span className="ml-1.5 text-[10px] text-success">active</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-text-muted uppercase tracking-wider">Saved Profiles</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2 flex-wrap">
+                  {profiles.map(p => (
+                    <button key={p.id} onClick={() => loadProfile(p)}
+                      className={cn(
+                        "px-4 py-2 rounded-md text-sm font-medium transition-colors border",
+                        activeProfile?.id === p.id ? "bg-primary/10 border-primary text-primary" : "bg-surface-2 border-border text-text hover:bg-border-hover"
+                      )}>
+                      {p.name}
+                      {p.is_remote && <Badge variant="outline" className="ml-2 text-[10px] py-0 border-info text-info">remote</Badge>}
+                      {activeProfile?.id === p.id && <Badge variant="success" className="ml-2 text-[10px] py-0">active</Badge>}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <button onClick={handleStart} disabled={loading || status.running || !config.model_path}
-              className="px-8 py-3 bg-gradient-to-r from-success to-emerald-600 hover:from-success hover:to-emerald-700 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-success/30 disabled:shadow-none flex items-center gap-2">
-              {loading ? (
-                <><span className="animate-spin">{'\u25cb'}</span> Starting...</>
-              ) : (
-                <>{'\u25b6'} Deploy Server</>
-              )}
-            </button>
-            <button onClick={handleStop} disabled={!status.running}
-              className="px-6 py-3 bg-danger hover:bg-danger/90 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-all disabled:shadow-none flex items-center gap-2">
-              {'\u25a0'} Stop
-            </button>
-            <button onClick={handleRestart} disabled={!status.running}
-              className="px-6 py-3 glass hover:bg-surface-2 disabled:opacity-40 rounded-xl text-sm font-bold transition-all disabled:shadow-none flex items-center gap-2">
-              {'\u21bb'} Restart
-            </button>
+          <div className="flex gap-3 pt-2">
+            <Button size="lg" onClick={handleStart} disabled={loading || status.running || !config.model_path} className="gap-2">
+              {loading ? <RotateCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {loading ? 'Starting...' : 'Deploy Server'}
+            </Button>
+            <Button size="lg" variant="danger" onClick={handleStop} disabled={!status.running} className="gap-2">
+              <Square className="h-4 w-4" /> Stop
+            </Button>
+            <Button size="lg" variant="secondary" onClick={handleRestart} disabled={!status.running} className="gap-2">
+              <RotateCw className="h-4 w-4" /> Restart
+            </Button>
           </div>
         </div>
       )}
 
       {tab === 'logs' && (
-        <div className="glass rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <span className="text-sm font-medium">Server Logs</span>
-            <span className="text-xs text-text-muted">{logs.length} lines</span>
+        <Card className="overflow-hidden border-border bg-[#050510]">
+          <div className="px-4 py-3 border-b border-border bg-surface-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-text flex items-center gap-2"><FileText className="h-4 w-4" /> Server Logs</span>
+            <Badge variant="outline">{logs.length} lines</Badge>
           </div>
-          <div className="h-96 overflow-y-auto p-4 font-mono text-xs space-y-1 bg-[#050510]">
+          <div className="h-[500px] overflow-y-auto p-4 font-mono text-xs leading-relaxed text-green-400/80">
             {logs.map((line, i) => (
-              <div key={i} className="text-green-400/70 hover:text-green-300 transition-colors">{line}</div>
+              <div key={i} className="hover:text-green-300 transition-colors whitespace-pre-wrap">{line}</div>
             ))}
-            {!logs.length && <div className="text-text-muted italic py-8 text-center">Waiting for server output...</div>}
+            {!logs.length && <div className="text-text-muted italic py-12 text-center opacity-50">Waiting for server output...</div>}
             <div ref={logEndRef} />
           </div>
-        </div>
+        </Card>
       )}
     </div>
   )

@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { tts, stt } from '../api/endpoints'
+import { Mic, Square, Volume2, Send, Loader2, Bot, User, MessageSquare } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { cn } from '../components/ui/Button'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -65,72 +69,120 @@ export default function ChatPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }
 
   return (
-    <div className="flex flex-col h-full animate-fade-in">
-      <div className="p-4 border-b border-border/50 glass flex items-center gap-3">
-        <h1 className="text-sm font-bold gradient-text">Chat</h1>
-        <input value={model} onChange={e => setModel(e.target.value)}
-          className="flex-1 max-w-[200px] px-3 py-1.5 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-xs"
-          placeholder="Model name" />
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-text-muted">Temp:</span>
-          <input type="number" min={0} max={2} step={0.1} value={temp} onChange={e => setTemp(parseFloat(e.target.value))}
-            className="w-14 px-2 py-1 rounded-lg bg-bg border border-border text-xs focus:outline-none" />
+    <div className="flex flex-col h-full animate-in bg-bg">
+      <div className="px-6 py-4 border-b border-border bg-surface flex flex-wrap items-center gap-4 shadow-sm z-10">
+        <div className="flex items-center gap-2 text-text font-bold text-lg">
+          <MessageSquare className="h-5 w-5 text-primary" />
+          Chat
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-            <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-              msg.role === 'user'
-                ? 'bg-gradient-to-r from-primary to-secondary text-white rounded-br-sm shadow-lg shadow-primary/20'
-                : 'glass rounded-bl-sm'
-            }`}>
-              <p className="text-sm whitespace-pre-wrap">{msg.content || (streaming && i === messages.length - 1 ? '\u25a0\u25a0\u25a0' : '')}</p>
-            </div>
+        
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-text-muted">Model</span>
+            <Input 
+              value={model} 
+              onChange={e => setModel(e.target.value)}
+              className="w-40 h-8 text-xs bg-bg"
+              placeholder="Model name" 
+            />
           </div>
-        ))}
-        <div ref={chatEndRef} />
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-text-muted">Temp</span>
+            <Input 
+              type="number" 
+              min={0} max={2} step={0.1} 
+              value={temp} 
+              onChange={e => setTemp(parseFloat(e.target.value))}
+              className="w-16 h-8 text-xs bg-bg text-center px-1" 
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="border-t border-border/50 p-4 glass">
-        <div className="flex items-center gap-2 mb-2">
-          <button onClick={async () => {
-            if (recording) { mediaRecorder.current?.stop(); setRecording(false); return }
-            try {
-              const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-              const mr = new MediaRecorder(stream)
-              audioChunks.current = []
-              mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.current.push(e.data) }
-              mr.onstop = async () => {
-                const blob = new Blob(audioChunks.current, { type: 'audio/wav' })
-                try { const r = await stt(blob); setInput(prev => prev + ' ' + r.data.text) } catch {}
-                stream.getTracks().forEach(t => t.stop())
-              }
-              mr.start(); mediaRecorder.current = mr; setRecording(true)
-            } catch {}
-          }}
-            className={`px-3 py-1.5 rounded-lg text-xs transition ${recording ? 'bg-danger text-white animate-pulse' : 'glass hover:bg-surface-2'}`}>
-            {recording ? '\ud83d\udd34 Recording...' : '\ud83c\udfa4 STT'}
-          </button>
-          <button onClick={async () => {
-            const last = [...messages].reverse().find(m => m.role === 'assistant')
-            if (!last) return
-            try { const r = await tts(last.content); setAudioUrl(URL.createObjectURL(r.data)) } catch {}
-          }} className="px-3 py-1.5 rounded-lg glass hover:bg-surface-2 text-xs transition">
-            {'\ud83d\udd0a TTS'}
-          </button>
-          {audioUrl && <audio src={audioUrl} controls className="h-8" />}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-slide-up`}>
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1",
+                msg.role === 'user' ? "bg-primary text-white" : "bg-surface-2 border border-border text-text"
+              )}>
+                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+              </div>
+              <div className={cn(
+                "max-w-[80%] rounded-2xl px-5 py-3 shadow-sm",
+                msg.role === 'user'
+                  ? "bg-primary text-white rounded-tr-sm"
+                  : "bg-surface border border-border text-text rounded-tl-sm"
+              )}>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {msg.content || (streaming && i === messages.length - 1 ? <span className="animate-pulse">●●●</span> : '')}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
         </div>
-        <div className="flex gap-2">
-          <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
-            placeholder="Type your message..."
-            className="flex-1 px-4 py-2.5 rounded-xl glass resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
-            rows={2} />
-          <button onClick={sendMessage} disabled={streaming || !input.trim()}
-            className="px-6 py-2 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover text-white font-medium text-sm transition-all shadow-lg shadow-primary/20 disabled:opacity-50 self-end">
-            {streaming ? '...' : '\u2192'}
-          </button>
+      </div>
+
+      <div className="border-t border-border bg-surface p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-2 mb-3">
+            <Button 
+              size="sm" 
+              variant={recording ? 'danger' : 'secondary'} 
+              onClick={async () => {
+                if (recording) { mediaRecorder.current?.stop(); setRecording(false); return }
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                  const mr = new MediaRecorder(stream)
+                  audioChunks.current = []
+                  mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.current.push(e.data) }
+                  mr.onstop = async () => {
+                    const blob = new Blob(audioChunks.current, { type: 'audio/wav' })
+                    try { const r = await stt(blob); setInput(prev => prev + (prev ? ' ' : '') + r.data.text) } catch {}
+                    stream.getTracks().forEach(t => t.stop())
+                  }
+                  mr.start(); mediaRecorder.current = mr; setRecording(true)
+                } catch {}
+              }}
+              className="gap-2"
+            >
+              {recording ? <Square className="h-3 w-3 animate-pulse" /> : <Mic className="h-3 w-3" />}
+              {recording ? 'Recording...' : 'STT'}
+            </Button>
+            <Button 
+              size="sm" 
+              variant="secondary"
+              onClick={async () => {
+                const last = [...messages].reverse().find(m => m.role === 'assistant')
+                if (!last) return
+                try { const r = await tts(last.content); setAudioUrl(URL.createObjectURL(r.data)) } catch {}
+              }} 
+              className="gap-2"
+            >
+              <Volume2 className="h-3 w-3" /> TTS
+            </Button>
+            {audioUrl && <audio src={audioUrl} controls className="h-8 max-w-[200px]" />}
+          </div>
+          
+          <div className="flex items-end gap-3 bg-surface-2 border border-border rounded-xl p-2 focus-within:ring-2 focus-within:ring-primary/50 transition-shadow shadow-sm">
+            <textarea 
+              value={input} 
+              onChange={e => setInput(e.target.value)} 
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message... (Shift+Enter for new line)"
+              className="flex-1 max-h-32 min-h-[44px] px-3 py-2.5 bg-transparent resize-none focus:outline-none text-sm text-text placeholder:text-text-muted"
+              rows={1} 
+            />
+            <Button 
+              onClick={sendMessage} 
+              disabled={streaming || !input.trim()}
+              className="mb-1 rounded-lg h-9 w-10 p-0"
+            >
+              {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
