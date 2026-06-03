@@ -17,7 +17,7 @@ function StatCard({ label, value, unit, icon: Icon, colorClass, active }: {
       "transition-all duration-300 group hover:-translate-y-1",
       active ? "hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5" : "opacity-75"
     )}>
-      <CardContent className="p-6">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-semibold text-text-muted uppercase tracking-widest">{label}</span>
           <div className={cn(
@@ -48,7 +48,7 @@ function StatCard({ label, value, unit, icon: Icon, colorClass, active }: {
             <div className="bg-info h-full transition-all duration-500" style={{ width: `${parseFloat(value)}%` }} />
           </div>
         )}
-      </CardContent>
+      </div>
     </Card>
   )
 }

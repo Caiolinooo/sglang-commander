@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setupAdmin, validateHFToken } from '../api/endpoints'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Settings, AlertTriangle, Check, X, User, Mail, Lock, ShieldCheck } from 'lucide-react'
 
 export default function SetupWizard() {
   const [step, setStep] = useState<'account' | 'hf'>('account')
@@ -46,94 +50,143 @@ export default function SetupWizard() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg" style={{ backgroundImage: 'radial-gradient(ellipse at top, rgba(99,102,241,0.08) 0%, transparent 50%)' }}>
-      <div className="glass rounded-2xl p-8 w-full max-w-md mx-4 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-bg px-4" style={{ backgroundImage: 'radial-gradient(ellipse at top, rgba(99,102,241,0.08) 0%, transparent 50%)' }}>
+      <Card className="w-full max-w-md p-8 animate-fade-in">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-primary/30">{'\u2699'}</div>
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-lg shadow-primary/30">
+            <Settings className="w-6 h-6 animate-spin" style={{ animationDuration: '3s' }} />
+          </div>
           <h1 className="text-2xl font-bold gradient-text">Initial Setup</h1>
           <p className="text-text-muted text-sm mt-1">
             {step === 'account' ? 'Create your admin account' : 'Connect to HuggingFace'}
           </p>
           <div className="flex justify-center gap-2 mt-4">
-            <div className={`h-1.5 w-12 rounded-full ${step === 'account' ? 'bg-primary' : 'bg-surface-3'}`} />
-            <div className={`h-1.5 w-12 rounded-full ${step === 'hf' ? 'bg-primary' : 'bg-surface-3'}`} />
+            <div className={`h-1.5 w-12 rounded-full transition-all duration-300 ${step === 'account' ? 'bg-primary' : 'bg-surface-2'}`} />
+            <div className={`h-1.5 w-12 rounded-full transition-all duration-300 ${step === 'hf' ? 'bg-primary' : 'bg-surface-2'}`} />
           </div>
         </div>
 
         {error && (
-          <div className="bg-danger/10 border border-danger/30 text-danger px-4 py-3 rounded-xl text-sm mb-4 animate-fade-in">{'\u26a0'} {error}</div>
+          <div className="bg-danger/10 border border-danger/30 text-danger px-4 py-3 rounded-xl text-sm mb-4 flex items-center gap-2 animate-fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
 
         {step === 'account' && (
           <form onSubmit={handleSubmitAccount} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Username</label>
-              <input type="text" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+              <Input
+                type="text"
+                value={form.username}
+                onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
+                required
+                icon={<User className="w-4 h-4" />}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Email</label>
-              <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+              <Input
+                type="email"
+                value={form.email}
+                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                required
+                icon={<Mail className="w-4 h-4" />}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Password</label>
-              <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+              <Input
+                type="password"
+                value={form.password}
+                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                required
+                icon={<Lock className="w-4 h-4" />}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Confirm Password</label>
-              <input type="password" value={form.confirm} onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+              <Input
+                type="password"
+                value={form.confirm}
+                onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))}
+                required
+                icon={<ShieldCheck className="w-4 h-4" />}
+              />
             </div>
-            <button type="submit"
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary text-white font-medium text-sm transition-all shadow-lg shadow-primary/20">
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary text-white font-medium text-sm transition-all shadow-lg shadow-primary/20"
+            >
               Next: HuggingFace Setup
-            </button>
+            </Button>
           </form>
         )}
 
         {step === 'hf' && (
           <div className="space-y-4">
-            <div className="glass rounded-xl p-4 text-sm text-text-muted">
-              <p className="font-medium text-text mb-1">Why do I need this?</p>
+            <div className="border border-border bg-surface-2 rounded-xl p-4 text-sm text-text-muted">
+              <p className="font-semibold text-text mb-1">Why do I need this?</p>
               <p>A HuggingFace token lets you download gated models (Llama, Mistral, etc.) and avoids rate limits.</p>
-              <p className="mt-2">Get yours at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener" className="text-primary hover:underline">huggingface.co/settings/tokens</a></p>
+              <p className="mt-2">Get yours at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">huggingface.co/settings/tokens</a></p>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">HuggingFace Token (optional)</label>
               <div className="flex gap-2">
-                <input type="password" value={form.huggingface_token}
+                <Input
+                  type="password"
+                  value={form.huggingface_token}
                   onChange={e => { setForm(p => ({ ...p, huggingface_token: e.target.value })); setHfStatus('idle') }}
                   placeholder="hf_xxxxxxxxxxxxxxxxxxxx"
-                  className="flex-1 px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition font-mono" />
-                <button type="button" onClick={handleValidateHF} disabled={!form.huggingface_token.trim() || hfStatus === 'checking'}
-                  className="px-4 py-2.5 rounded-xl glass text-sm font-medium hover:bg-surface-2 transition disabled:opacity-50">
+                  className="flex-1 font-mono animate-in"
+                  icon={<Lock className="w-4 h-4" />}
+                />
+                <Button
+                  type="button"
+                  onClick={handleValidateHF}
+                  disabled={!form.huggingface_token.trim() || hfStatus === 'checking'}
+                  variant="secondary"
+                  className="h-9 px-4 shrink-0"
+                >
                   {hfStatus === 'checking' ? '...' : 'Verify'}
-                </button>
+                </Button>
               </div>
               {hfStatus === 'valid' && (
-                <p className="text-success text-xs mt-2 animate-fade-in">{'\u2713'} Connected as {hfUser.name || hfUser.email}</p>
+                <p className="text-success text-xs mt-2 flex items-center gap-1 animate-fade-in">
+                  <Check className="w-3.5 h-3.5" /> Connected as {hfUser.name || hfUser.email}
+                </p>
               )}
               {hfStatus === 'invalid' && (
-                <p className="text-danger text-xs mt-2 animate-fade-in">{'\u2717'} Invalid token</p>
+                <p className="text-danger text-xs mt-2 flex items-center gap-1 animate-fade-in">
+                  <X className="w-3.5 h-3.5" /> Invalid token
+                </p>
               )}
             </div>
 
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setStep('account')}
-                className="flex-1 py-2.5 rounded-xl glass text-sm font-medium hover:bg-surface-2 transition">
+              <Button
+                variant="secondary"
+                onClick={() => setStep('account')}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+              >
                 Back
-              </button>
-              <button onClick={handleFinalSubmit} disabled={loading}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary text-white font-medium text-sm transition-all shadow-lg shadow-primary/20 disabled:opacity-50">
+              </Button>
+              <Button
+                onClick={handleFinalSubmit}
+                disabled={loading}
+                size="lg"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary text-white font-medium text-sm transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+              >
                 {loading ? 'Setting up...' : (form.huggingface_token ? 'Save & Complete' : 'Skip for now')}
-              </button>
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
+
