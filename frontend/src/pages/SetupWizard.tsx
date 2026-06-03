@@ -1,143 +1,66 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setupAdmin } from '../api/endpoints'
-import { useAuth } from '../contexts/AuthContext'
 
 export default function SetupWizard() {
-  const [step, setStep] = useState(1)
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '', server_port: 8080 })
+  const [form, setForm] = useState({ username: 'admin', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { login: authLogin } = useAuth()
 
-  const update = (field: string, value: string | number) =>
-    setForm((prev) => ({ ...prev, [field]: value }))
-
-  const handleCreate = async () => {
-    if (form.password !== form.confirm) {
-      setError('Passwords do not match')
-      return
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError('')
+    if (form.password !== form.confirm) { setError('Passwords do not match'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-      const resp = await setupAdmin({
-        username: form.username,
-        email: form.email,
-        password: form.password,
-        server_port: form.server_port,
-      })
-      const { access_token, refresh_token, user } = resp.data
-      authLogin(user, access_token, refresh_token)
-      navigate('/')
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Setup failed'
-      setError(msg)
-    } finally {
-      setLoading(false)
-    }
+      await setupAdmin({ username: form.username, email: form.email, password: form.password })
+      navigate('/login')
+    } catch {
+      setError('Setup failed. Try again.')
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg">
-      <div className="bg-surface p-8 rounded-2xl shadow-2xl w-full max-w-lg border border-border">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-white">Welcome to SGLang Commander</h1>
-          <p className="text-text-muted mt-1">Let's get your AI server management tool set up</p>
+    <div className="min-h-screen flex items-center justify-center bg-bg" style={{ backgroundImage: 'radial-gradient(ellipse at top, rgba(99,102,241,0.08) 0%, transparent 50%)' }}>
+      <div className="glass rounded-2xl p-8 w-full max-w-md mx-4 animate-fade-in">
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-primary/30">{'\u2699'}</div>
+          <h1 className="text-2xl font-bold gradient-text">Initial Setup</h1>
+          <p className="text-text-muted text-sm mt-1">Create your admin account to get started</p>
         </div>
 
-        <div className="flex justify-center gap-2 mb-8">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className={`w-3 h-3 rounded-full ${step >= s ? 'bg-primary' : 'bg-surface-2'}`} />
-          ))}
-        </div>
-
-        {step === 1 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Create Admin Account</h2>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Username</label>
-              <input
-                type="text" value={form.username}
-                onChange={(e) => update('username', e.target.value)}
-                className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="admin" required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Email</label>
-              <input
-                type="email" value={form.email}
-                onChange={(e) => update('email', e.target.value)}
-                className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="admin@example.com" required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Password (min 8 chars)</label>
-              <input
-                type="password" value={form.password}
-                onChange={(e) => update('password', e.target.value)}
-                className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Confirm Password</label>
-              <input
-                type="password" value={form.confirm}
-                onChange={(e) => update('confirm', e.target.value)}
-                className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              />
-            </div>
-          </div>
+        {error && (
+          <div className="bg-danger/10 border border-danger/30 text-danger px-4 py-3 rounded-xl text-sm mb-4 animate-fade-in">{'\u26a0'} {error}</div>
         )}
 
-        {step === 2 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Server Configuration</h2>
-            <div>
-              <label className="block text-sm text-text-muted mb-1">Server Port</label>
-              <input
-                type="number" value={form.server_port}
-                onChange={(e) => update('server_port', parseInt(e.target.value))}
-                className="w-full px-4 py-2.5 bg-bg border border-border rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="text-xs text-text-muted mt-1">Port for the web management interface (default: 8080)</p>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Username</label>
+            <input type="text" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
           </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Summary</h2>
-            <div className="bg-bg rounded-lg p-4 space-y-2">
-              <p><span className="text-text-muted">Username:</span> <span className="text-white">{form.username}</span></p>
-              <p><span className="text-text-muted">Email:</span> <span className="text-white">{form.email}</span></p>
-              <p><span className="text-text-muted">Server Port:</span> <span className="text-white">{form.server_port}</span></p>
-            </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Email</label>
+            <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
           </div>
-        )}
-
-        <div className="flex justify-between mt-8">
-          {step > 1 ? (
-            <button onClick={() => setStep(step - 1)} className="px-6 py-2 border border-border rounded-lg text-text-muted hover:text-white hover:border-text-muted transition">
-              Back
-            </button>
-          ) : <div />}
-          {step < 3 ? (
-            <button onClick={() => setStep(step + 1)} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
-              Next
-            </button>
-          ) : (
-            <button onClick={handleCreate} disabled={loading} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition disabled:opacity-50">
-              {loading ? 'Creating...' : 'Finish Setup'}
-            </button>
-          )}
-        </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Password</label>
+            <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Confirm Password</label>
+            <input type="password" value={form.confirm} onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl glass focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm transition" required />
+          </div>
+          <button type="submit" disabled={loading}
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary text-white font-medium text-sm transition-all shadow-lg shadow-primary/20 disabled:opacity-50">
+            {loading ? 'Setting up...' : 'Create Admin Account'}
+          </button>
+        </form>
       </div>
     </div>
   )
