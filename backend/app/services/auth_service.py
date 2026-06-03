@@ -83,7 +83,8 @@ class AuthService:
             if not session:
                 return None
 
-            if session.expires_at < datetime.now(timezone.utc):
+            expires_at = session.expires_at.replace(tzinfo=timezone.utc) if session.expires_at.tzinfo is None else session.expires_at
+            if expires_at < datetime.now(timezone.utc):
                 await db.delete(session)
                 await db.commit()
                 return None
