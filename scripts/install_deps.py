@@ -71,14 +71,32 @@ if __name__ == "__main__":
     missing = check_installed()
     if not missing:
         print("\nAll dependencies are already installed!")
-        sys.exit(0)
+    else:
+        print(f"\n{len(missing)} packages need to be installed:")
+        for pkg in missing:
+            print(f"  - {pkg}")
 
-    print(f"\n{len(missing)} packages need to be installed:")
-    for pkg in missing:
-        print(f"  - {pkg}")
+        print("\nInstalling...\n")
+        install_packages(missing)
 
-    print("\nInstalling...\n")
-    install_packages(missing)
+    # Fix sglang compat issues (kernels / transformers)
+    print("\nChecking sglang compatibility...")
+    try:
+        import sglang  # noqa: F401
+        result = subprocess.run(
+            [sys.executable, "-c", "from transformers.models.llama import modeling_llama"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print("\u26a0\ufe0f  Detected sglang/transformers incompatibility. Fixing...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "transformers<4.56", "kernels<0.10"], check=False)
+            print("\u2705 Patched transformers/kernels for sglang compatibility")
+        else:
+            print("\u2705 sglang compatibility OK")
+    except ImportError:
+        print("\u2139\ufe0f  sglang not installed (skip compat check)")
+        print("   To install sglang for local model serving:")
+        print("   pip install sglang transformers<4.56 kernels<0.10")
 
     still_missing = check_installed()
     if still_missing:
