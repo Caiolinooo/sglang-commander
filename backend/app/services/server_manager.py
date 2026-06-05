@@ -51,9 +51,9 @@ class ServerManager:
         else:
             python_cmd = shutil.which("python3") or shutil.which("python") or sys.executable
 
-        # Pre-flight: verify sglang is importable
+        # Pre-flight: verify sglang.launch_server can actually be loaded
         check = await asyncio.create_subprocess_exec(
-            python_cmd, "-c", "import sglang; print(sglang.__version__)",
+            python_cmd, "-c", "from sglang.launch_server import launch_server; print('ok')",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await check.communicate()
@@ -62,8 +62,8 @@ class ServerManager:
             # Auto-fix kernels/transformers incompat (non-blocking, with timeout)
             if "kernels" in err or "LayerRepository" in err or "revision or a version" in err or "Lfm2VlConfig" in err or "cannot import name" in err:
                 self._log_lines.append(f"[WARN] Detected transformers/kernels incompat, auto-fixing (timeout 60s)...")
-                # Install latest compatible kernels (>=0.10 has revision field)
-                fix_cmd = [python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location", "--upgrade", "kernels>=0.10.0"]
+                # Upgrade both transformers and kernels to compatible versions
+                fix_cmd = [python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location", "--upgrade", "transformers>=4.56", "kernels>=0.10.0"]
                 try:
                     fix = await asyncio.create_subprocess_exec(
                         *fix_cmd,
@@ -74,23 +74,23 @@ class ServerManager:
                         _, _ = await asyncio.wait_for(fix.communicate(), timeout=60.0)
                     except asyncio.TimeoutError:
                         fix.kill()
-                        msg = f"Auto-fix timed out after 60s. Run manually:\n  {python_cmd} -m pip install --upgrade 'kernels>=0.10.0'"
+                        msg = f"Auto-fix timed out after 60s. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
                         self._log_lines.append(f"[ERROR] {msg}")
                         return {"status": "error", "message": msg}
-                    # Retry
+                    # Retry with the full launch_server import
                     check2 = await asyncio.create_subprocess_exec(
-                        python_cmd, "-c", "import sglang; print(sglang.__version__)",
+                        python_cmd, "-c", "from sglang.launch_server import launch_server; print('ok')",
                         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                     )
                     stdout2, stderr2 = await check2.communicate()
                     if check2.returncode != 0:
                         fix_err = stderr2.decode(errors="replace").strip()
-                        msg = f"Auto-fix did not resolve. Run manually:\n  {python_cmd} -m pip install --upgrade 'kernels>=0.10.0'\n\nError: {fix_err[:300]}"
+                        msg = f"Auto-fix did not resolve. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'\n\nError: {fix_err[:300]}"
                         self._log_lines.append(f"[ERROR] {msg}")
                         return {"status": "error", "message": msg}
                     self._log_lines.append(f"[OK] Auto-fixed. sglang ready.")
                 except Exception as e:
-                    msg = f"Auto-fix crashed: {e}. Run manually:\n  {python_cmd} -m pip install --upgrade 'kernels>=0.10.0'"
+                    msg = f"Auto-fix crashed: {e}. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
                     self._log_lines.append(f"[ERROR] {msg}")
                     return {"status": "error", "message": msg}
             else:
