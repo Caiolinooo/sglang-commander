@@ -34,7 +34,7 @@ const FIXABLE_CHECKS: Record<string, string> = {
 }
 
 const NUCLEAR_FIXES = [
-  { key: 'all-compat', label: 'Fix all compat (transformers + kernels + sglang)', desc: 'Upgrade everything at once' },
+  { key: 'all-compat', label: 'Fix all compat (transformers 5.6.0 + kernels 0.10.0 + sglang)', desc: 'Known-good combo for sglang 0.5.12' },
   { key: 'sglang-force', label: 'Force reinstall sglang', desc: 'Nuclear option: --force-reinstall --no-deps' },
 ]
 

@@ -75,15 +75,16 @@ async def auto_fix(check_name: str, current_user: User = Depends(get_current_use
     python_cmd = _python_cmd()
 
     cmds = {
-        "transformers": [python_cmd, "-m", "pip", "install", "--upgrade", "transformers>=4.56"],
-        "kernels":      [python_cmd, "-m", "pip", "install", "--upgrade", "kernels>=0.10.0"],
+        "transformers": [python_cmd, "-m", "pip", "install", "transformers==5.6.0"],
+        "kernels":      [python_cmd, "-m", "pip", "install", "kernels==0.10.0"],
         "flash-attn":   [python_cmd, "-m", "pip", "install", "flash-attn", "--no-build-isolation"],
         "triton":       [python_cmd, "-m", "pip", "install", "triton"],
         "sglang":       [python_cmd, "-m", "pip", "install", "--upgrade", "sglang"],
         "torch":        [python_cmd, "-m", "pip", "install", "torch", "--index-url", "https://download.pytorch.org/whl/cu121"],
         # Nuclear option: full reinstall
         "sglang-force":  [python_cmd, "-m", "pip", "install", "--force-reinstall", "--no-deps", "sglang"],
-        "all-compat":    [python_cmd, "-m", "pip", "install", "--upgrade", "transformers>=4.56", "kernels>=0.10.0", "sglang"],
+        # Known-good combo: sglang 0.5.12 + transformers 5.6.0 + kernels 0.10.0
+        "all-compat":    [python_cmd, "-m", "pip", "install", "transformers==5.6.0", "kernels==0.10.0", "sglang"],
     }
 
     if check_name not in cmds:

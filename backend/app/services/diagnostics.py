@@ -179,27 +179,28 @@ async def _check_sglang_imports(python_cmd: str) -> tuple[bool, str, Optional[st
 
 
 def _suggest_sglang_fix(err: str, python_cmd: str) -> str:
-    """Map error patterns to specific fix commands."""
+    """Map error patterns to specific fix commands.
+
+    Known-good combo for sglang 0.5.12+: transformers==5.6.0 + kernels==0.10.0
+    kernels 0.15+ has LayerRepository API incompat with transformers hub_kernels.py.
+    """
     err_lower = err.lower()
 
     if "kernels" in err_lower and ("revision or a version" in err_lower or "LayerRepository" in err_lower):
-        return f"{python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
+        return f"{python_cmd} -m pip install transformers==5.6.0 kernels==0.10.0"
     if "lfm2vlconfig" in err_lower or "cannot import name" in err_lower:
-        return f"{python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
+        return f"{python_cmd} -m pip install transformers==5.6.0 kernels==0.10.0"
     if "_apply_hf" in err or "apply_hf" in err_lower or "monkey" in err_lower:
-        # The sglang transformers-patcher often fails on version mismatch
-        return f"{python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'\nIf still failing: {python_cmd} -m pip install --force-reinstall --no-deps sglang"
+        return f"{python_cmd} -m pip install transformers==5.6.0 kernels==0.10.0"
     if "modulenotfounderror" in err_lower:
-        # Extract the missing module
         import re
         m = re.search(r"ModuleNotFoundError: No module named '([^']+)'", err)
         if m:
             return f"{python_cmd} -m pip install {m.group(1)}"
     if "importerror" in err_lower or "attributeerror" in err_lower:
-        return f"{python_cmd} -m pip install --force-reinstall --no-deps sglang 'transformers>=4.56' 'kernels>=0.10.0'"
+        return f"{python_cmd} -m pip install --force-reinstall --no-deps sglang transformers==5.6.0 kernels==0.10.0"
 
-    # Default
-    return f"{python_cmd} -m pip install --upgrade sglang 'transformers>=4.56' 'kernels>=0.10.0'"
+    return f"{python_cmd} -m pip install transformers==5.6.0 kernels==0.10.0 sglang"
 
 
 async def _get_pkg_version(python_cmd: str, module: str, name: str) -> tuple[bool, str]:

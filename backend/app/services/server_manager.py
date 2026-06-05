@@ -69,11 +69,11 @@ class ServerManager:
             if sglang_check and not sglang_check["ok"]:
                 fix_sug = sglang_check.get("fix", "")
                 if "transformers" in fix_sug and "kernels" in fix_sug:
-                    self._log_lines.append(f"[WARN] Attempting one-shot auto-fix...")
+                    self._log_lines.append(f"[WARN] Attempting one-shot auto-fix (transformers 5.6.0 + kernels 0.10.0)...")
                     try:
                         fix = await asyncio.create_subprocess_exec(
-                            python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location", "--upgrade",
-                            "transformers>=4.56", "kernels>=0.10.0",
+                            python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location",
+                            "transformers==5.6.0", "kernels==0.10.0",
                             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                         )
                         try:
