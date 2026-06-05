@@ -87,8 +87,9 @@ export const applyUpdate = () => apiClient.post('/update/apply')
 export const cancelUpdate = () => apiClient.post('/update/cancel')
 
 // Diagnostics
-export const runDiagnostics = () => apiClient.get<{ can_run: boolean; checks: Array<{ name: string; ok: boolean; message: string; fix?: string; severity: string }>; errors: string[]; warnings: string[]; fix_suggestions: string[]; python: string }>('/diagnostics/')
-export const autoFix = (checkName: string) => apiClient.post<{ status: string; message: string }>(`/diagnostics/fix/${checkName}`)
+export const runDiagnostics = (full = false) => apiClient.get<{ can_run: boolean; checks: Array<{ name: string; ok: boolean; message: string; fix?: string; severity: string; full_error?: string }>; errors: string[]; warnings: string[]; fix_suggestions: string[]; versions: Record<string, string>; python: string }>(`/diagnostics/${full ? '?full=1' : ''}`)
+export const getVersions = () => apiClient.get<{ python: string; versions: Record<string, string> }>('/diagnostics/versions')
+export const autoFix = (checkName: string) => apiClient.post<{ status: string; message: string; error_tail?: string; stdout_tail?: string }>(`/diagnostics/fix/${checkName}`)
 
 // Benchmark
 export const runBenchmark = (config: Record<string, unknown>) =>
