@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { LayoutDashboard, Server, MessageSquare, Box, FileText, Timer, Globe, Settings, Sun, Moon, LogOut, TerminalSquare, Shield } from 'lucide-react'
+import { LayoutDashboard, Server, MessageSquare, Box, FileText, Timer, Globe, Settings, Sun, Moon, LogOut, TerminalSquare, Shield, Activity } from 'lucide-react'
 
 const sections = [
   {
@@ -21,8 +21,9 @@ const sections = [
     ]
   },
   {
-    title: 'Management',
+    title: 'System',
     items: [
+      { to: '/diagnostics', label: 'Diagnostics', icon: Activity },
       { to: '/deploy', label: 'API Deployments', icon: Globe },
       { to: '/settings', label: 'Settings', icon: Settings },
     ]

@@ -12,6 +12,7 @@ import DeployPage from './pages/DeployPage'
 import SettingsPage from './pages/SettingsPage'
 import BenchmarkPage from './pages/BenchmarkPage'
 import ServerProfilesPage from './pages/ServerProfilesPage'
+import DiagnosticsPage from './pages/DiagnosticsPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -48,6 +49,7 @@ export default function App() {
       <Route path="/settings" element={<ProtectedRoute><AppLayout><SettingsPage /></AppLayout></ProtectedRoute>} />
       <Route path="/benchmark" element={<ProtectedRoute><AppLayout><BenchmarkPage /></AppLayout></ProtectedRoute>} />
       <Route path="/profiles" element={<ProtectedRoute><AppLayout><ServerProfilesPage /></AppLayout></ProtectedRoute>} />
+      <Route path="/diagnostics" element={<ProtectedRoute><AppLayout><DiagnosticsPage /></AppLayout></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

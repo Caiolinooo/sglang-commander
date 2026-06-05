@@ -51,52 +51,64 @@ class ServerManager:
         else:
             python_cmd = shutil.which("python3") or shutil.which("python") or sys.executable
 
-        # Pre-flight: verify sglang.launch_server can actually be loaded
-        check = await asyncio.create_subprocess_exec(
-            python_cmd, "-c", "from sglang.launch_server import launch_server; print('ok')",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await check.communicate()
-        if check.returncode != 0:
-            err = stderr.decode(errors="replace").strip()
-            # Auto-fix kernels/transformers incompat (non-blocking, with timeout)
-            if "kernels" in err or "LayerRepository" in err or "revision or a version" in err or "Lfm2VlConfig" in err or "cannot import name" in err:
-                self._log_lines.append(f"[WARN] Detected transformers/kernels incompat, auto-fixing (timeout 60s)...")
-                # Upgrade both transformers and kernels to compatible versions
-                fix_cmd = [python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location", "--upgrade", "transformers>=4.56", "kernels>=0.10.0"]
-                try:
-                    fix = await asyncio.create_subprocess_exec(
-                        *fix_cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    try:
-                        _, _ = await asyncio.wait_for(fix.communicate(), timeout=60.0)
-                    except asyncio.TimeoutError:
-                        fix.kill()
-                        msg = f"Auto-fix timed out after 60s. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
-                        self._log_lines.append(f"[ERROR] {msg}")
-                        return {"status": "error", "message": msg}
-                    # Retry with the full launch_server import
-                    check2 = await asyncio.create_subprocess_exec(
-                        python_cmd, "-c", "from sglang.launch_server import launch_server; print('ok')",
-                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                    )
-                    stdout2, stderr2 = await check2.communicate()
-                    if check2.returncode != 0:
-                        fix_err = stderr2.decode(errors="replace").strip()
-                        msg = f"Auto-fix did not resolve. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'\n\nError: {fix_err[:300]}"
-                        self._log_lines.append(f"[ERROR] {msg}")
-                        return {"status": "error", "message": msg}
-                    self._log_lines.append(f"[OK] Auto-fixed. sglang ready.")
-                except Exception as e:
-                    msg = f"Auto-fix crashed: {e}. Run manually:\n  {python_cmd} -m pip install --upgrade 'transformers>=4.56' 'kernels>=0.10.0'"
-                    self._log_lines.append(f"[ERROR] {msg}")
-                    return {"status": "error", "message": msg}
+        # Pre-flight: full diagnostics check
+        from app.services.diagnostics import run_full_diagnostics
+        diag = await run_full_diagnostics(python_cmd)
+
+        for check in diag.checks:
+            if check["ok"]:
+                self._log_lines.append(f"[CHECK] ✓ {check['name']}: {check['message']}")
+            elif check["severity"] == "warning":
+                self._log_lines.append(f"[CHECK] ⚠ {check['name']}: {check['message']}")
             else:
-                msg = f"sglang not installed in {python_cmd}: {err}\n\nInstall with: {python_cmd} -m pip install sglang"
+                self._log_lines.append(f"[CHECK] ✗ {check['name']}: {check['message']}")
+
+        if not diag.can_run:
+            # Try one-shot auto-fix for transformers/kernels (most common issue)
+            sglang_check = next((c for c in diag.checks if c["name"] == "sglang installation"), None)
+            if sglang_check and not sglang_check["ok"]:
+                fix_sug = sglang_check.get("fix", "")
+                if "transformers" in fix_sug and "kernels" in fix_sug:
+                    self._log_lines.append(f"[WARN] Attempting one-shot auto-fix...")
+                    try:
+                        fix = await asyncio.create_subprocess_exec(
+                            python_cmd, "-m", "pip", "install", "--quiet", "--no-warn-script-location", "--upgrade",
+                            "transformers>=4.56", "kernels>=0.10.0",
+                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                        )
+                        try:
+                            _, _ = await asyncio.wait_for(fix.communicate(), timeout=90.0)
+                        except asyncio.TimeoutError:
+                            fix.kill()
+                        # Re-check
+                        diag = await run_full_diagnostics(python_cmd)
+                        if diag.can_run:
+                            self._log_lines.append(f"[OK] Auto-fix succeeded")
+                        else:
+                            msg = f"Auto-fix did not resolve. Run:\n  {fix_sug}\n\nThen check:\n  GET /api/v1/diagnostics/"
+                            self._log_lines.append(f"[ERROR] {msg}")
+                            return {"status": "error", "message": msg, "diagnostics": diag.to_dict()}
+                    except Exception as e:
+                        self._log_lines.append(f"[WARN] Auto-fix crashed: {e}")
+                else:
+                    msg = f"Cannot auto-fix. Run: {fix_sug}"
+                    self._log_lines.append(f"[ERROR] {msg}")
+                    return {"status": "error", "message": msg, "diagnostics": diag.to_dict()}
+
+            if not diag.can_run:
+                err_lines = ["System not ready to launch sglang:"]
+                for err in diag.errors:
+                    err_lines.append(f"  • {err}")
+                err_lines.append("")
+                err_lines.append("Get full report: GET /api/v1/diagnostics/")
+                err_lines.append("Auto-fix: POST /api/v1/diagnostics/fix/{check_name} (admin only)")
+                err_lines.append("")
+                err_lines.append("Quick fixes:")
+                for sug in diag.fix_suggestions:
+                    err_lines.append(f"  {sug}")
+                msg = "\n".join(err_lines)
                 self._log_lines.append(f"[ERROR] {msg}")
-                return {"status": "error", "message": msg}
+                return {"status": "error", "message": msg, "diagnostics": diag.to_dict()}
 
         cmd = [
             python_cmd, "-m", "sglang.launch_server",

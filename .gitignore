@@ -26,6 +26,10 @@ Thumbs.db
 *.db
 *.sqlite3
 
+# Setup state
+.setup_complete
+backend/.setup_complete
+
 # Downloads
 sglang_commander_update.tmp
 
