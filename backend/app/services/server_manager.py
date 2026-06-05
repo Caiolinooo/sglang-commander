@@ -58,9 +58,30 @@ class ServerManager:
         )
         stdout, stderr = await check.communicate()
         if check.returncode != 0:
-            msg = f"sglang not installed in {python_cmd}: {stderr.decode(errors='replace').strip()}"
-            self._log_lines.append(f"[ERROR] {msg}")
-            return {"status": "error", "message": msg}
+            err = stderr.decode(errors="replace").strip()
+            # Auto-fix kernels/transformers incompat
+            if "kernels" in err or "LayerRepository" in err or "revision or a version" in err:
+                self._log_lines.append(f"[WARN] Detected transformers/kernels incompat, auto-fixing...")
+                fix = await asyncio.create_subprocess_exec(
+                    python_cmd, "-m", "pip", "install", "transformers<4.56", "kernels<0.10",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                _, _ = await fix.communicate()
+                # Retry
+                check2 = await asyncio.create_subprocess_exec(
+                    python_cmd, "-c", "import sglang; print(sglang.__version__)",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                stdout2, stderr2 = await check2.communicate()
+                if check2.returncode != 0:
+                    msg = f"Auto-fix failed. Please run manually:\n  {python_cmd} -m pip install 'transformers<4.56' 'kernels<0.10'\n\nOriginal error: {err}"
+                    self._log_lines.append(f"[ERROR] {msg}")
+                    return {"status": "error", "message": msg}
+                self._log_lines.append(f"[OK] Auto-fixed. sglang ready.")
+            else:
+                msg = f"sglang not installed in {python_cmd}: {err}\n\nInstall with: {python_cmd} -m pip install sglang"
+                self._log_lines.append(f"[ERROR] {msg}")
+                return {"status": "error", "message": msg}
 
         cmd = [
             python_cmd, "-m", "sglang.launch_server",
