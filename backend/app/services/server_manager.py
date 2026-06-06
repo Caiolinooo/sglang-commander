@@ -161,7 +161,7 @@ class ServerManager:
         if config.get("mem_fraction_static") is not None:
             cmd.extend(["--mem-fraction-static", str(config["mem_fraction_static"])])
         if config.get("cpu_offload_gb") is not None and config["cpu_offload_gb"] > 0:
-            cmd.extend(["--cpu-offload-gb", str(config["cpu_offload_gb"])])
+            cmd.extend(["--cpu-offload-gb", str(int(config["cpu_offload_gb"]))])
         if config.get("disable_cuda_graph"):
             cmd.append("--disable-cuda-graph")
         if config.get("max_running_requests") is not None and config["max_running_requests"] > 0:
@@ -169,7 +169,7 @@ class ServerManager:
 
         # MoE
         if config.get("ep_size") is not None and config["ep_size"] > 1:
-            cmd.extend(["--ep-size", str(config["ep_size"])])
+            cmd.extend(["--expert-parallel-size", str(config["ep_size"])])
         if config.get("moe_runner_backend"):
             cmd.extend(["--moe-runner-backend", config["moe_runner_backend"]])
         if config.get("enable_dp_attention"):
@@ -178,14 +178,14 @@ class ServerManager:
         # Speculative decoding / MTP
         if config.get("speculative_algorithm"):
             cmd.extend(["--speculative-algorithm", config["speculative_algorithm"]])
-        if config.get("speculative_num_steps") is not None:
-            cmd.extend(["--speculative-num-steps", str(config["speculative_num_steps"])])
-        if config.get("speculative_draft_model_path"):
-            cmd.extend(["--speculative-draft-model-path", config["speculative_draft_model_path"]])
+            if config.get("speculative_num_steps") is not None:
+                cmd.extend(["--speculative-num-steps", str(config["speculative_num_steps"])])
+            if config.get("speculative_draft_model_path"):
+                cmd.extend(["--speculative-draft-model-path", config["speculative_draft_model_path"]])
 
         # Pipeline parallelism
         if config.get("pp_size") is not None and config["pp_size"] > 1:
-            cmd.extend(["--pp-size", str(config["pp_size"])])
+            cmd.extend(["--pipeline-parallel-size", str(config["pp_size"])])
 
         extra = config.get("extra_args", {})
         for k, v in extra.items():
