@@ -496,6 +496,89 @@ class ModelManager:
         except Exception as e:
             return {"error": str(e)}
 
+    async def get_quant_variants(self, repo_id: str) -> dict:
+        """Search HuggingFace for quantized variants of a model."""
+        try:
+            model_name = repo_id.split("/")[-1] if "/" in repo_id else repo_id
+            org = repo_id.split("/")[0] if "/" in repo_id else ""
+
+            # Search for variants with quantization suffixes
+            search_terms = [model_name]
+            for suffix in ["-AWQ", "-GPTQ", "-FP8", "-int4", "-int8", "-GGUF"]:
+                search_terms.append(f"{model_name}{suffix}")
+
+            variants = []
+            seen_ids = set()
+
+            # Search by model name
+            results = hf_api.list_models(search=model_name, limit=50)
+            for m in results:
+                mid = m.modelId
+                if mid in seen_ids or mid == repo_id:
+                    continue
+                seen_ids.add(mid)
+
+                # Check if it's a quantized variant of the same model
+                mid_name = mid.split("/")[-1] if "/" in mid else mid
+                tags = list(getattr(m, "tags", []))
+                lib = getattr(m, "library_name", None)
+
+                # Detect quantization from tags or name
+                quant = _detect_quantization(tags, mid_name)
+                fmt = _detect_format(tags, lib)
+
+                is_variant = False
+                quant_type = ""
+
+                if quant:
+                    quant_type = quant
+                    is_variant = True
+                elif "awq" in mid_name.lower():
+                    quant_type = "awq"
+                    is_variant = True
+                elif "gptq" in mid_name.lower():
+                    quant_type = "gptq"
+                    is_variant = True
+                elif "fp8" in mid_name.lower() or "eetq" in mid_name.lower():
+                    quant_type = "fp8"
+                    is_variant = True
+                elif "gguf" in mid_name.lower() or fmt == "gguf":
+                    quant_type = "gguf"
+                    is_variant = True
+                elif "int4" in mid_name.lower() or "int8" in mid_name.lower():
+                    quant_type = mid_name.lower().split("model")[-1].split("-")[0] if "int" in mid_name.lower() else ""
+                    is_variant = True
+
+                # Also check if same org and similar name (fuzzy match)
+                if not is_variant and org and mid.startswith(org + "/"):
+                    # Check if the base name is similar
+                    base = model_name.lower().replace("instruct", "").replace("chat", "").strip("-_ ")
+                    variant_base = mid_name.lower().replace("instruct", "").replace("chat", "").strip("-_ ")
+                    if base[:10] == variant_base[:10] and any(q in mid_name.lower() for q in ["awq", "gptq", "fp8", "int4", "int8", "gguf"]):
+                        quant_type = next((q for q in ["awq", "gptq", "fp8", "int4", "int8", "gguf"] if q in mid_name.lower()), "unknown")
+                        is_variant = True
+
+                if is_variant:
+                    params_b = _estimate_params_billions(tags, mid_name, getattr(m, "config", None))
+                    variants.append({
+                        "repo_id": mid,
+                        "quantization": quant_type,
+                        "downloads": getattr(m, "downloads", 0),
+                        "likes": getattr(m, "likes", 0),
+                        "params_billions": params_b,
+                    })
+
+            # Sort by downloads
+            variants.sort(key=lambda v: v["downloads"], reverse=True)
+
+            return {
+                "base_model": repo_id,
+                "variants": variants[:20],
+                "total": len(variants),
+            }
+        except Exception as e:
+            return {"variants": [], "total": 0, "error": str(e)}
+
     async def scan_local_models(self) -> dict:
         """Scan common directories for locally downloaded models."""
         gpu = self._get_gpu()

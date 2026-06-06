@@ -13,14 +13,39 @@ class ServerStartRequest(BaseModel):
     enable_multimodal: bool = Field(default=False)
     trust_remote_code: bool = Field(default=False)
     context_length: Optional[int] = Field(default=None)
+
+    # Tool calling & reasoning
     tool_call_parser: Optional[str] = Field(default=None, description="llama3, qwen, mistral, deepseekv3, etc.")
     reasoning_parser: Optional[str] = Field(default=None, description="deepseek-r1, qwen3, etc.")
     chat_template: Optional[str] = Field(default=None)
     grammar_backend: Optional[str] = Field(default=None, description="auto, xgrammar, outlines, llguidance")
+
+    # Load format
     load_format: Optional[str] = Field(default=None, description="auto, safetensors, gguf")
-    enable_ep_moe: bool = Field(default=False)
     is_embedding: bool = Field(default=False)
     log_level: Optional[str] = Field(default=None, description="debug, info, warning, error")
+
+    # Memory optimization
+    kv_cache_dtype: Optional[str] = Field(default=None, description="auto, fp8_e4m3, fp8_e5m2, fp4_e2m1, bf16")
+    mem_fraction_static: Optional[float] = Field(default=None, ge=0.3, le=0.99, description="GPU memory fraction for model+KV. Lower if OOM")
+    cpu_offload_gb: Optional[float] = Field(default=None, ge=0, description="GB of model weights to offload to CPU RAM")
+    disable_cuda_graph: bool = Field(default=False)
+    max_running_requests: Optional[int] = Field(default=None, ge=1, le=1024)
+
+    # MoE
+    ep_size: Optional[int] = Field(default=None, ge=1, description="Expert parallelism size")
+    moe_runner_backend: Optional[str] = Field(default=None, description="auto, deep_gemm, triton, cutlass")
+    enable_dp_attention: bool = Field(default=False)
+    enable_ep_moe: bool = Field(default=False)
+
+    # Speculative decoding / MTP
+    speculative_algorithm: Optional[str] = Field(default=None, description="EAGLE, NGRAM, NEXTN, STANDALONE")
+    speculative_num_steps: Optional[int] = Field(default=None, ge=1, le=10)
+    speculative_draft_model_path: Optional[str] = Field(default=None)
+
+    # Pipeline parallelism
+    pp_size: Optional[int] = Field(default=None, ge=1, description="Pipeline parallelism size")
+
     extra_args: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -92,6 +92,8 @@ export const getModelCard = (repo_id: string) =>
   apiClient.get(`/models/card/${encodeURIComponent(repo_id)}`)
 export const getModelInfo_ = (repo_id: string) =>
   apiClient.get(`/models/info/${encodeURIComponent(repo_id)}`)
+export const getQuantVariants = (repo_id: string) =>
+  apiClient.get<{ variants: Array<{ repo_id: string; quantization: string; downloads: number; likes: number; params_billions: number | null }>; total: number }>(`/models/variants/${encodeURIComponent(repo_id)}`)
 export const validateHFToken = () => apiClient.get('/models/validate-token')
 export const getGPUInfo = () => apiClient.get<GPUInfo>('/models/gpu')
 

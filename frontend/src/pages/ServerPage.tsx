@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { startServer, stopServer, restartServer, getServerStatus, getServerLogs, listServerProfiles, getActiveProfile, scanLocalModels, getGPULiveStatus, validateModel } from '../api/endpoints'
 import type { ServerProfile, LocalModel, GPULiveStatus, GPULiveInfo, ModelValidation } from '../types'
-import { Cpu, Play, Square, RotateCw, Settings, FileText, Search, Shield, MonitorSpeaker, ChevronDown, ChevronUp, Gauge, Zap, Server, MemoryStick, AlertTriangle, HardDrive, RefreshCw, Thermometer, Power, Activity, CheckCircle2, XCircle, Info, Link as LinkIcon } from 'lucide-react'
+import { Cpu, Play, Square, RotateCw, Settings, FileText, Search, Shield, MonitorSpeaker, ChevronDown, ChevronUp, Gauge, Zap, Server, MemoryStick, AlertTriangle, HardDrive, RefreshCw, Thermometer, Power, Activity, CheckCircle2, XCircle, Info, Link as LinkIcon, Layers } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -45,6 +45,15 @@ interface AdvancedConfig {
   load_format: string
   is_embedding: boolean
   log_level: string
+  kv_cache_dtype: string
+  cpu_offload_gb: number
+  disable_cuda_graph: boolean
+  ep_size: number
+  moe_runner_backend: string
+  speculative_algorithm: string
+  speculative_num_steps: number
+  speculative_draft_model_path: string
+  pp_size: number
 }
 
 function Toggle({ value, onChange, label, icon: Icon }: {
@@ -341,6 +350,15 @@ export default function ServerPage() {
     load_format: '',
     is_embedding: false,
     log_level: '',
+    kv_cache_dtype: '',
+    cpu_offload_gb: 0,
+    disable_cuda_graph: false,
+    ep_size: 1,
+    moe_runner_backend: '',
+    speculative_algorithm: '',
+    speculative_num_steps: 3,
+    speculative_draft_model_path: '',
+    pp_size: 1,
   })
   const [status, setStatus] = useState({ running: false, health: 'stopped', pid: null as number | null, model_path: '', uptime_seconds: null as number | null })
   const [logs, setLogs] = useState<string[]>([])
@@ -479,6 +497,15 @@ export default function ServerPage() {
     if (advanced.load_format) args.load_format = advanced.load_format
     if (advanced.is_embedding) args.is_embedding = true
     if (advanced.log_level) args.log_level = advanced.log_level
+    if (advanced.kv_cache_dtype) args.kv_cache_dtype = advanced.kv_cache_dtype
+    if (advanced.cpu_offload_gb > 0) args.cpu_offload_gb = advanced.cpu_offload_gb
+    if (advanced.disable_cuda_graph) args.disable_cuda_graph = true
+    if (advanced.ep_size > 1) args.ep_size = advanced.ep_size
+    if (advanced.moe_runner_backend) args.moe_runner_backend = advanced.moe_runner_backend
+    if (advanced.speculative_algorithm) args.speculative_algorithm = advanced.speculative_algorithm
+    if (advanced.speculative_num_steps > 0) args.speculative_num_steps = advanced.speculative_num_steps
+    if (advanced.speculative_draft_model_path) args.speculative_draft_model_path = advanced.speculative_draft_model_path
+    if (advanced.pp_size > 1) args.pp_size = advanced.pp_size
     return args
   }
 
@@ -494,6 +521,18 @@ export default function ServerPage() {
         load_format: advanced.load_format || undefined,
         is_embedding: advanced.is_embedding || undefined,
         log_level: advanced.log_level || undefined,
+        kv_cache_dtype: advanced.kv_cache_dtype || undefined,
+        mem_fraction_static: advanced.mem_fraction_static !== 0.88 ? advanced.mem_fraction_static : undefined,
+        cpu_offload_gb: advanced.cpu_offload_gb > 0 ? advanced.cpu_offload_gb : undefined,
+        disable_cuda_graph: advanced.disable_cuda_graph || undefined,
+        max_running_requests: advanced.max_running_requests > 0 ? advanced.max_running_requests : undefined,
+        ep_size: advanced.ep_size > 1 ? advanced.ep_size : undefined,
+        moe_runner_backend: advanced.moe_runner_backend || undefined,
+        enable_dp_attention: advanced.enable_dp_attention || undefined,
+        speculative_algorithm: advanced.speculative_algorithm || undefined,
+        speculative_num_steps: advanced.speculative_algorithm ? advanced.speculative_num_steps : undefined,
+        speculative_draft_model_path: advanced.speculative_draft_model_path || undefined,
+        pp_size: advanced.pp_size > 1 ? advanced.pp_size : undefined,
         extra_args: buildArgs(),
       })
     } catch (e: any) {
@@ -787,6 +826,78 @@ export default function ServerPage() {
                     <div className="space-y-3 pt-2">
                       <Toggle value={advanced.is_embedding} onChange={v => updateA('is_embedding', v)} label="Embedding Model" icon={LinkIcon} />
                     </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border">
+                  <div className="space-y-5">
+                    <div className="text-xs font-semibold text-text uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-border">
+                      <HardDrive className="h-3.5 w-3.5" /> Memory & Offloading
+                    </div>
+                    <OptionButtons label="KV Cache Dtype" options={[
+                      { value: '', label: 'Auto (BF16)' }, { value: 'fp8_e4m3', label: 'FP8 E4M3 (2x ctx)' },
+                      { value: 'fp8_e5m2', label: 'FP8 E5M2' }, { value: 'bf16', label: 'BF16' },
+                    ]} value={advanced.kv_cache_dtype} onChange={v => updateA('kv_cache_dtype', v)} />
+                    <SliderField label="CPU Offload" value={advanced.cpu_offload_gb}
+                      min={0} max={50} step={1}
+                      onChange={v => updateA('cpu_offload_gb', v)}
+                      format={v => v === 0 ? 'Disabled' : `${v} GB`}
+                      description="Offload model weights to CPU RAM. Use when GPU VRAM is insufficient" />
+                    <SliderField label="Memory Fraction" value={advanced.mem_fraction_static}
+                      min={0.5} max={0.99} step={0.01}
+                      onChange={v => updateA('mem_fraction_static', v)}
+                      format={v => `${(v * 100).toFixed(0)}%`}
+                      description="GPU memory for model+KV. Lower if OOM (default: 88%)" />
+                    <SliderField label="Max Running Requests" value={advanced.max_running_requests}
+                      min={0} max={256} step={1}
+                      onChange={v => updateA('max_running_requests', v)}
+                      format={v => v === 0 ? 'auto' : v.toString()}
+                      description="Limit concurrent requests to cap memory usage" />
+                    <div className="space-y-3 pt-2">
+                      <Toggle value={advanced.disable_cuda_graph} onChange={v => updateA('disable_cuda_graph', v)} label="Disable CUDA Graph" icon={AlertTriangle} />
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="text-xs font-semibold text-text uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-border">
+                      <Layers className="h-3.5 w-3.5" /> MoE & Expert Parallelism
+                    </div>
+                    <SliderField label="Expert Parallelism (EP)" value={advanced.ep_size}
+                      min={1} max={8} step={1}
+                      onChange={v => updateA('ep_size', v)}
+                      format={v => v <= 1 ? 'Disabled' : `EP${v}`}
+                      description="Distribute MoE experts across GPUs. Set to GPU count for large MoE models" />
+                    <OptionButtons label="MoE Runner Backend" options={[
+                      { value: '', label: 'Auto' }, { value: 'deep_gemm', label: 'Deep GEMM' },
+                      { value: 'triton', label: 'Triton' }, { value: 'cutlass', label: 'CUTLASS' },
+                    ]} value={advanced.moe_runner_backend} onChange={v => updateA('moe_runner_backend', v)} />
+                    <div className="space-y-3 pt-2">
+                      <Toggle value={advanced.enable_dp_attention} onChange={v => updateA('enable_dp_attention', v)} label="DP Attention (MoE)" icon={Zap} />
+                    </div>
+                    <div className="text-xs font-semibold text-text uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-border mt-4">
+                      <Zap className="h-3.5 w-3.5" /> Speculative Decoding / MTP
+                    </div>
+                    <OptionButtons label="Algorithm" options={[
+                      { value: '', label: 'Disabled' }, { value: 'EAGLE', label: 'EAGLE' },
+                      { value: 'NGRAM', label: 'N-gram' }, { value: 'NEXTN', label: 'NextN' },
+                    ]} value={advanced.speculative_algorithm} onChange={v => updateA('speculative_algorithm', v)} />
+                    {advanced.speculative_algorithm && (
+                      <>
+                        <SliderField label="Speculative Steps" value={advanced.speculative_num_steps}
+                          min={1} max={10} step={1}
+                          onChange={v => updateA('speculative_num_steps', v)}
+                          description="Number of speculative steps. More = faster but more VRAM" />
+                        <TextInput label="Draft Model Path" value={advanced.speculative_draft_model_path} onChange={v => updateA('speculative_draft_model_path', v)}
+                          placeholder="auto (use model MTP heads)" description="External draft model for speculation (optional)" />
+                      </>
+                    )}
+                    <div className="text-xs font-semibold text-text uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-border mt-4">
+                      <Server className="h-3.5 w-3.5" /> Pipeline Parallelism
+                    </div>
+                    <SliderField label="Pipeline Parallel (PP)" value={advanced.pp_size}
+                      min={1} max={4} step={1}
+                      onChange={v => updateA('pp_size', v)}
+                      format={v => v <= 1 ? 'Disabled' : `PP${v}`}
+                      description="Split model layers across GPUs. Combine with TP for very large models" />
                   </div>
                 </div>
               </CardContent>

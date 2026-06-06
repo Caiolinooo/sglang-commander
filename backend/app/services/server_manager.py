@@ -155,6 +155,38 @@ class ServerManager:
         if config.get("log_level"):
             cmd.extend(["--log-level", config["log_level"]])
 
+        # Memory optimization
+        if config.get("kv_cache_dtype"):
+            cmd.extend(["--kv-cache-dtype", config["kv_cache_dtype"]])
+        if config.get("mem_fraction_static") is not None:
+            cmd.extend(["--mem-fraction-static", str(config["mem_fraction_static"])])
+        if config.get("cpu_offload_gb") is not None and config["cpu_offload_gb"] > 0:
+            cmd.extend(["--cpu-offload-gb", str(config["cpu_offload_gb"])])
+        if config.get("disable_cuda_graph"):
+            cmd.append("--disable-cuda-graph")
+        if config.get("max_running_requests") is not None and config["max_running_requests"] > 0:
+            cmd.extend(["--max-running-requests", str(config["max_running_requests"])])
+
+        # MoE
+        if config.get("ep_size") is not None and config["ep_size"] > 1:
+            cmd.extend(["--ep-size", str(config["ep_size"])])
+        if config.get("moe_runner_backend"):
+            cmd.extend(["--moe-runner-backend", config["moe_runner_backend"]])
+        if config.get("enable_dp_attention"):
+            cmd.append("--enable-dp-attention")
+
+        # Speculative decoding / MTP
+        if config.get("speculative_algorithm"):
+            cmd.extend(["--speculative-algorithm", config["speculative_algorithm"]])
+        if config.get("speculative_num_steps") is not None:
+            cmd.extend(["--speculative-num-steps", str(config["speculative_num_steps"])])
+        if config.get("speculative_draft_model_path"):
+            cmd.extend(["--speculative-draft-model-path", config["speculative_draft_model_path"]])
+
+        # Pipeline parallelism
+        if config.get("pp_size") is not None and config["pp_size"] > 1:
+            cmd.extend(["--pp-size", str(config["pp_size"])])
+
         extra = config.get("extra_args", {})
         for k, v in extra.items():
             flag = f"--{k.replace('_', '-')}"
@@ -222,6 +254,13 @@ class ServerManager:
                     self._health_status = "healthy"
                 if "error" in decoded.lower() or "traceback" in decoded.lower():
                     self._health_status = "error"
+                if "out of memory" in decoded.lower() or "cuda out of memory" in decoded.lower():
+                    self._log_lines.append("[HINT] OOM detected! Suggestions:")
+                    self._log_lines.append("[HINT]   1. Reduce --mem-fraction-static (current: try 0.80 or 0.75)")
+                    self._log_lines.append("[HINT]   2. Enable --kv-cache-dtype fp8_e4m3 (2x more context)")
+                    self._log_lines.append("[HINT]   3. Reduce --cuda-graph-max-batch-size")
+                    self._log_lines.append("[HINT]   4. Add --cpu-offload-gb 5 (offload 5GB to CPU)")
+                    self._log_lines.append("[HINT]   5. Reduce --max-running-requests")
 
         if self._process and self._process.stdout:
             await asyncio.gather(

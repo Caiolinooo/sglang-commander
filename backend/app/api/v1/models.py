@@ -142,6 +142,11 @@ async def model_info_endpoint(repo_id: str):
     return await model_manager.get_model_architecture(repo_id)
 
 
+@router.get("/variants/{repo_id:path}")
+async def get_quant_variants(repo_id: str, current_user: User = Depends(get_current_user)):
+    return await model_manager.get_quant_variants(repo_id)
+
+
 @router.get("/gpu-processes")
 async def get_gpu_processes(current_user: User = Depends(get_current_user)):
     return await model_manager.get_gpu_processes()

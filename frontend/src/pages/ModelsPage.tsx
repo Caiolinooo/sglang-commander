@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { searchModels, downloadModel, listLocalModels, scanLocalModels, locateModel, deleteModel, deployModel, getGPUInfo } from '../api/endpoints'
+import { searchModels, downloadModel, listLocalModels, scanLocalModels, locateModel, deleteModel, deployModel, getGPUInfo, getQuantVariants } from '../api/endpoints'
 import type { HFModel, GPUInfo, LocalModel, LocateModelResponse, ModelSearchFilters } from '../types'
 import { Search, Zap, HardDrive, Download, Heart, RefreshCw, Inbox, Database, Check, AlertTriangle, Cpu, TrendingUp, Layers, Play, Trash2, FolderOpen, X, Filter, SlidersHorizontal, Shield, Globe, Box } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/Card'
@@ -131,6 +131,9 @@ export default function ModelsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  const [quantVariants, setQuantVariants] = useState<Array<{ repo_id: string; quantization: string; downloads: number; likes: number; params_billions: number | null }>>([])
+  const [loadingVariants, setLoadingVariants] = useState(false)
+
   useEffect(() => { handleRefresh(); fetchGPU() }, [])
 
   const fetchGPU = async () => {
@@ -207,6 +210,13 @@ export default function ModelsPage() {
       load_format: detectGGUF(name, model.tags) ? 'gguf' : '',
     })
     setShowDeployDialog(true)
+
+    // Fetch quantization variants
+    setLoadingVariants(true)
+    try {
+      const resp = await getQuantVariants(model.repo_id)
+      setQuantVariants(resp.data.variants || [])
+    } catch {} finally { setLoadingVariants(false) }
   }
 
   const openDeployDialogFromLocal = (model: LocalModel) => {
@@ -350,6 +360,24 @@ export default function ModelsPage() {
                   <option value="fp8">FP8</option>
                   <option value="gptq">GPTQ</option>
                 </select>
+                {quantVariants.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[10px] text-text-muted font-medium">Available on HuggingFace:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {quantVariants.slice(0, 6).map(v => (
+                        <button key={v.repo_id} onClick={() => {
+                          setDeployConfig(p => ({ ...p, quantization: v.quantization }))
+                          setSelectedModel(prev => prev ? { ...prev, repo_id: v.repo_id } : prev)
+                        }}
+                          className={cn("text-[10px] px-2 py-0.5 rounded-full border transition-colors",
+                            deployConfig.quantization === v.quantization ? "bg-primary/15 text-primary border-primary" : "bg-surface-2 text-text-muted border-border hover:border-primary")}>
+                          {v.quantization.toUpperCase()} ({(v.downloads / 1000).toFixed(0)}K)
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {loadingVariants && <p className="text-[10px] text-text-muted animate-pulse">Loading variants...</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-text-muted">Dtype</label>
