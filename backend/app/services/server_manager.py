@@ -118,33 +118,72 @@ class ServerManager:
             "--tensor-parallel-size", str(tp),
         ]
 
+        quant = config.get("quantization", "")
+        dtype = config.get("dtype", "auto")
+
+        # AWQ only supports float16, force it if dtype is auto or bfloat16
+        if quant and "awq" in quant.lower():
+            if dtype in ("auto", "bfloat16", "bf16"):
+                dtype = "float16"
+                self._log_lines.append("[FIX] AWQ requires float16, forced --dtype float16")
+
         if config.get("enable_multimodal"):
             cmd.append("--enable-multimodal")
         if config.get("trust_remote_code"):
             cmd.append("--trust-remote-code")
-        if config.get("quantization"):
-            cmd.extend(["--quantization", config["quantization"]])
-        if config.get("dtype"):
-            cmd.extend(["--dtype", config["dtype"]])
+        if quant:
+            cmd.extend(["--quantization", quant])
+        if dtype:
+            cmd.extend(["--dtype", dtype])
         if config.get("context_length"):
             cmd.extend(["--context-length", str(config["context_length"])])
+
+        if config.get("tool_call_parser"):
+            cmd.extend(["--tool-call-parser", config["tool_call_parser"]])
+        if config.get("reasoning_parser"):
+            cmd.extend(["--reasoning-parser", config["reasoning_parser"]])
+        if config.get("chat_template"):
+            cmd.extend(["--chat-template", config["chat_template"]])
+        if config.get("grammar_backend"):
+            cmd.extend(["--grammar-backend", config["grammar_backend"]])
+        if config.get("load_format"):
+            cmd.extend(["--load-format", config["load_format"]])
+        if config.get("enable_ep_moe"):
+            cmd.append("--enable-ep-moe")
+        if config.get("is_embedding"):
+            cmd.append("--is-embedding")
+        if config.get("log_level"):
+            cmd.extend(["--log-level", config["log_level"]])
 
         extra = config.get("extra_args", {})
         for k, v in extra.items():
             flag = f"--{k.replace('_', '-')}"
+            if flag in cmd:
+                continue
             if isinstance(v, bool):
                 if v:
                     cmd.append(flag)
             else:
                 cmd.extend([flag, str(v)])
 
+        if "--enable-metrics" not in cmd:
+            cmd.append("--enable-metrics")
+
         self._log_lines.append(f"[CMD] {' '.join(cmd)}")
+
+        env = os.environ.copy()
+        env["PATH"] = "/home/caio/sglang-commander/.venv/bin:/home/caio/.local/lib/python3.12/site-packages/nvidia/cu13/bin:" + env.get("PATH", "")
+        env["CUDA_HOME"] = "/home/caio/.local/lib/python3.12/site-packages/nvidia/cu13"
+        env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        if settings.huggingface_token:
+            env["HF_TOKEN"] = settings.huggingface_token
 
         try:
             self._process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
         except FileNotFoundError as e:
             msg = f"Failed to start: Python executable not found at {python_cmd}. Error: {e}"

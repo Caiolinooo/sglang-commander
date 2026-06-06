@@ -51,31 +51,24 @@ class MetricsCollector:
             await asyncio.sleep(2)
 
     async def _collect_snapshot(self) -> dict:
-        return {
+        base = {
             "timestamp": time.time(),
             **await self._scrape_sglang_metrics(),
             **self._get_system_metrics(),
         }
-
-    async def _scrape_sglang_metrics(self) -> dict:
-        from app.services.server_manager import server_manager
-        status = await server_manager.get_status()
-        if not status.get("running"):
-            return {}
-
-        host = status.get("host", settings.sglang_default_host)
-        port = status.get("port", settings.sglang_default_port)
-
-        metrics = {}
+        # Add GPU live status with processes
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
-                async with session.get(f"http://{host}:{port}/metrics") as resp:
-                    if resp.status == 200:
-                        text = await resp.text()
-                        metrics = self._parse_prometheus(text)
+            from app.services.model_manager import model_manager
+            gpu_status = await model_manager.get_live_gpu_status()
+            base["gpu_live"] = gpu_status
         except Exception:
             pass
+        return base
 
+    async def _scrape_sglang_metrics(self) -> dict:
+        metrics = {}
+
+        # Always collect GPU metrics via pynvml (works without sglang)
         try:
             import pynvml
             pynvml.nvmlInit()
@@ -92,24 +85,52 @@ class MetricsCollector:
         except Exception:
             pass
 
+        # Scrape sglang Prometheus metrics if server is running
+        from app.services.server_manager import server_manager
+        status = await server_manager.get_status()
+        if not status.get("running"):
+            return metrics
+
+        host = status.get("host", settings.sglang_default_host)
+        port = status.get("port", settings.sglang_default_port)
+
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
+                async with session.get(f"http://{host}:{port}/metrics") as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        sglang_metrics = self._parse_prometheus(text)
+                        metrics.update(sglang_metrics)
+        except Exception:
+            pass
+
         return metrics
 
     def _parse_prometheus(self, text: str) -> dict:
         metrics = {}
         patterns = [
-            (r'sglang:prompt_tokens_total\s+([\d.]+)', "prompt_tokens_total", int),
-            (r'sglang:generation_tokens_total\s+([\d.]+)', "generation_tokens_total", int),
-            (r'sglang:gen_throughput\s+([\d.]+)', "gen_throughput", float),
-            (r'sglang:num_running_reqs\s+([\d.]+)', "num_running_reqs", int),
-            (r'sglang:num_queue_reqs\s+([\d.]+)', "num_queue_reqs", int),
-            (r'sglang:token_usage\s+([\d.]+)', "token_usage", float),
-            (r'sglang:cache_hit_rate\s+([\d.]+)', "cache_hit_rate", float),
-            (r'sglang:time_to_first_token_seconds_count\s+([\d.]+)', "ttft_count", int),
-            (r'sglang:time_to_first_token_seconds_sum\s+([\d.e+.-]+)', "ttft_sum", float),
-            (r'sglang:time_per_output_token_seconds_count\s+([\d.]+)', "tpot_count", int),
-            (r'sglang:time_per_output_token_seconds_sum\s+([\d.e+.-]+)', "tpot_sum", float),
-            (r'sglang:e2e_request_latency_seconds_count\s+([\d.]+)', "e2e_count", int),
-            (r'sglang:e2e_request_latency_seconds_sum\s+([\d.e+.-]+)', "e2e_sum", float),
+            (r'sglang:gen_throughput\{[^}]*\}\s+([\d.e+\-]+)', "gen_throughput", float),
+            (r'sglang:num_running_reqs\{[^}]*\}\s+([\d.e+\-]+)', "num_running_reqs", int),
+            (r'sglang:num_queue_reqs\{[^}]*\}\s+([\d.e+\-]+)', "num_queue_reqs", int),
+            (r'sglang:token_usage\{[^}]*\}\s+([\d.e+\-]+)', "token_usage", float),
+            (r'sglang:cache_hit_rate\{[^}]*\}\s+([\d.e+\-]+)', "cache_hit_rate", float),
+            (r'sglang:time_to_first_token_seconds_sum\{[^}]*\}\s+([\d.e+\-]+)', "ttft_sum", float),
+            (r'sglang:time_to_first_token_seconds_count\{[^}]*\}\s+([\d.e+\-]+)', "ttft_count", int),
+            (r'sglang:e2e_request_latency_seconds_sum\{[^}]*\}\s+([\d.e+\-]+)', "e2e_sum", float),
+            (r'sglang:e2e_request_latency_seconds_count\{[^}]*\}\s+([\d.e+\-]+)', "e2e_count", int),
+            (r'sglang:prompt_tokens_histogram_sum\{[^}]*\}\s+([\d.e+\-]+)', "prompt_tokens_total", float),
+            (r'sglang:generation_tokens_histogram_sum\{[^}]*\}\s+([\d.e+\-]+)', "generation_tokens_total", float),
+            (r'sglang:queue_time_seconds_sum\{[^}]*\}\s+([\d.e+\-]+)', "queue_time_sum", float),
+            (r'sglang:queue_time_seconds_count\{[^}]*\}\s+([\d.e+\-]+)', "queue_time_count", int),
+            (r'sglang:context_len\{[^}]*\}\s+([\d.e+\-]+)', "context_len", int),
+            (r'sglang:max_total_num_tokens\{[^}]*\}\s+([\d.e+\-]+)', "max_total_num_tokens", int),
+            (r'sglang:num_used_tokens\{[^}]*\}\s+([\d.e+\-]+)', "num_used_tokens", int),
+            (r'sglang:kv_available_tokens\{[^}]*\}\s+([\d.e+\-]+)', "kv_available_tokens", int),
+            (r'sglang:num_grammar_queue_reqs\{[^}]*\}\s+([\d.e+\-]+)', "num_grammar_queue_reqs", int),
+            (r'sglang:utilization\{[^}]*\}\s+([\d.e+\-]+)', "utilization", float),
+            (r'sglang:num_retracted_reqs\{[^}]*\}\s+([\d.e+\-]+)', "num_retracted_reqs", int),
+            (r'sglang:num_paused_reqs\{[^}]*\}\s+([\d.e+\-]+)', "num_paused_reqs", int),
+            (r'sglang:new_token_ratio\{[^}]*\}\s+([\d.e+\-]+)', "new_token_ratio", float),
         ]
         for pattern, key, converter in patterns:
             match = re.search(pattern, text)
@@ -121,10 +142,10 @@ class MetricsCollector:
 
         if "ttft_sum" in metrics and metrics.get("ttft_count", 0) > 0:
             metrics["ttft_avg_ms"] = (metrics["ttft_sum"] / metrics["ttft_count"]) * 1000
-        if "tpot_sum" in metrics and metrics.get("tpot_count", 0) > 0:
-            metrics["tpot_avg_ms"] = (metrics["tpot_sum"] / metrics["tpot_count"]) * 1000
         if "e2e_sum" in metrics and metrics.get("e2e_count", 0) > 0:
             metrics["e2e_latency_avg_ms"] = (metrics["e2e_sum"] / metrics["e2e_count"]) * 1000
+        if "queue_time_sum" in metrics and metrics.get("queue_time_count", 0) > 0:
+            metrics["queue_time_avg_ms"] = (metrics["queue_time_sum"] / metrics["queue_time_count"]) * 1000
 
         return metrics
 

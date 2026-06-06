@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ServerStatus, MetricsSnapshot, HFModel, ZeroTierStatus, ServerProfile, BenchmarkResult, BenchmarkStatus, UpdateStatus, UpdateCheckResponse } from '../types'
+import type { ServerStatus, MetricsSnapshot, HFModel, GPUInfo, ZeroTierStatus, ServerProfile, BenchmarkResult, BenchmarkStatus, UpdateStatus, UpdateCheckResponse, LocalModel, GPULiveStatus, LocateModelResponse, DeleteModelResponse, ModelSearchFilters } from '../types'
 
 // Auth
 export const checkSetupStatus = () => apiClient.get('/auth/setup-status')
@@ -27,6 +27,8 @@ export const getServerLogs = (cursor: number = 0) =>
   apiClient.get(`/server/logs?cursor=${cursor}`)
 export const healthCheck = () => apiClient.get('/server/health')
 export const getModelInfo = () => apiClient.get('/server/model-info')
+export const validateModel = (config: Record<string, unknown>) =>
+  apiClient.post<{ valid: boolean; warnings: string[]; errors: string[]; suggestions: string[]; model_info: any }>('/server/validate', config)
 
 // Server Profiles
 export const listServerProfiles = () => apiClient.get<ServerProfile[]>('/server-profiles/')
@@ -46,18 +48,52 @@ export const chatCompletion = (payload: Record<string, unknown>) =>
   apiClient.post('/chat/completions', payload)
 
 // Models
-export const searchModels = (query: string, limit: number = 20, task?: string) =>
-  apiClient.get<{ models: HFModel[] }>(`/models/search?query=${encodeURIComponent(query)}&limit=${limit}${task ? `&task=${task}` : ''}`)
+const buildSearchParams = (filters?: ModelSearchFilters) => {
+  if (!filters) return ''
+  const params = new URLSearchParams()
+  if (filters.task) params.set('task', filters.task)
+  if (filters.library) params.set('library', filters.library)
+  if (filters.license) params.set('license', filters.license)
+  if (filters.framework) params.set('framework', filters.framework)
+  if (filters.language) params.set('language', filters.language)
+  if (filters.author) params.set('author', filters.author)
+  if (filters.sort_by) params.set('sort_by', filters.sort_by)
+  if (filters.sort_dir !== undefined) params.set('sort_dir', String(filters.sort_dir))
+  if (filters.min_params !== undefined) params.set('min_params', String(filters.min_params))
+  if (filters.max_params !== undefined) params.set('max_params', String(filters.max_params))
+  if (filters.quantization) params.set('quantization', filters.quantization)
+  if (filters.format) params.set('format', filters.format)
+  if (filters.fits_gpu) params.set('fits_gpu', 'true')
+  if (filters.multimodal) params.set('multimodal', 'true')
+  const s = params.toString()
+  return s ? `&${s}` : ''
+}
+
+export const searchModels = (query: string, limit: number = 20, filters?: ModelSearchFilters) =>
+  apiClient.get<{ models: HFModel[]; gpu?: GPUInfo }>(`/models/search?query=${encodeURIComponent(query)}&limit=${limit}${buildSearchParams(filters)}`)
 export const downloadModel = (repo_id: string, revision: string = 'main') =>
   apiClient.post('/models/download', { repo_id, revision })
 export const getDownloadStatus = (repo_id: string) =>
   apiClient.get(`/models/download-status/${encodeURIComponent(repo_id)}`)
 export const listLocalModels = () => apiClient.get('/models/local')
+export const scanLocalModels = () => apiClient.get<{ models: LocalModel[]; gpu: GPUInfo; scanned_dirs: string[] }>('/models/local-scan')
+export const locateModel = (repo_id: string) =>
+  apiClient.get<LocateModelResponse>(`/models/locate/${encodeURIComponent(repo_id)}`)
+export const deleteModel = (repo_id: string) =>
+  apiClient.delete<DeleteModelResponse>(`/models/local/${encodeURIComponent(repo_id)}`)
+export const deployModel = (config: {
+  repo_id: string; quantization?: string; dtype?: string; context_length?: number;
+  tensor_parallel_size?: number; host?: string; port?: number; trust_remote_code?: boolean;
+  tool_call_parser?: string; reasoning_parser?: string; enable_multimodal?: boolean; load_format?: string;
+}) => apiClient.post('/models/deploy', config)
+export const getGPUProcesses = () => apiClient.get('/models/gpu-processes')
+export const getGPULiveStatus = () => apiClient.get<GPULiveStatus>('/models/gpu-live')
 export const getModelCard = (repo_id: string) =>
   apiClient.get(`/models/card/${encodeURIComponent(repo_id)}`)
 export const getModelInfo_ = (repo_id: string) =>
   apiClient.get(`/models/info/${encodeURIComponent(repo_id)}`)
 export const validateHFToken = () => apiClient.get('/models/validate-token')
+export const getGPUInfo = () => apiClient.get<GPUInfo>('/models/gpu')
 
 // Metrics
 export const getLatestMetrics = () => apiClient.get<MetricsSnapshot>('/metrics/latest')
@@ -77,6 +113,10 @@ export const updateSetting = (key: string, value: unknown) =>
   apiClient.put('/settings/', { key, value })
 export const saveHuggingFaceToken = (token: string) =>
   apiClient.post('/settings/huggingface-token', { token })
+export const restartProject = () =>
+  apiClient.post('/settings/restart')
+export const restartAndRebuild = () =>
+  apiClient.post('/settings/restart-and-rebuild')
 
 // Updates
 export const checkUpdates = () => apiClient.get<UpdateCheckResponse>('/update/check')

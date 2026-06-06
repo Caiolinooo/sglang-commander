@@ -31,7 +31,7 @@ async def chat_completion(
 
     payload = {
         "model": req.model,
-        "messages": [m.model_dump() for m in req.messages],
+        "messages": [m.model_dump(exclude_none=True) for m in req.messages],
         "temperature": req.temperature,
         "top_p": req.top_p,
         "max_tokens": req.max_tokens,
@@ -41,15 +41,38 @@ async def chat_completion(
     }
     if req.stop:
         payload["stop"] = req.stop
+    if req.tools:
+        payload["tools"] = req.tools
+    if req.tool_choice:
+        payload["tool_choice"] = req.tool_choice
+    if req.response_format:
+        payload["response_format"] = req.response_format
+    if req.n > 1:
+        payload["n"] = req.n
+    if req.logprobs is not None:
+        payload["logprobs"] = req.logprobs
+    if req.top_logprobs is not None:
+        payload["top_logprobs"] = req.top_logprobs
+    if req.seed is not None:
+        payload["seed"] = req.seed
+    if req.enable_thinking is not None:
+        payload["extra_body"] = {"enable_thinking": req.enable_thinking}
 
     if not req.stream:
         async with httpx.AsyncClient(timeout=300.0) as client:
             r = await client.post(url, json=payload)
+            if r.status_code != 200:
+                raise HTTPException(status_code=r.status_code, detail=r.text)
             return r.json()
 
     async def generate():
         async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream("POST", url, json=payload) as r:
+                if r.status_code != 200:
+                    error_body = await r.aread()
+                    yield f"data: {json.dumps({'error': f'SGLang returned {r.status_code}: {error_body.decode(errors='replace')[:200]}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
                 async for line in r.aiter_lines():
                     if line.startswith("data: "):
                         data = line[6:]

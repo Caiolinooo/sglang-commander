@@ -13,6 +13,14 @@ class ServerStartRequest(BaseModel):
     enable_multimodal: bool = Field(default=False)
     trust_remote_code: bool = Field(default=False)
     context_length: Optional[int] = Field(default=None)
+    tool_call_parser: Optional[str] = Field(default=None, description="llama3, qwen, mistral, deepseekv3, etc.")
+    reasoning_parser: Optional[str] = Field(default=None, description="deepseek-r1, qwen3, etc.")
+    chat_template: Optional[str] = Field(default=None)
+    grammar_backend: Optional[str] = Field(default=None, description="auto, xgrammar, outlines, llguidance")
+    load_format: Optional[str] = Field(default=None, description="auto, safetensors, gguf")
+    enable_ep_moe: bool = Field(default=False)
+    is_embedding: bool = Field(default=False)
+    log_level: Optional[str] = Field(default=None, description="debug, info, warning, error")
     extra_args: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -3,8 +3,11 @@ from typing import Optional, Any
 
 
 class ChatMessage(BaseModel):
-    role: str = Field(..., pattern="^(system|user|assistant)$")
-    content: str | list[dict[str, Any]] = Field(...)
+    role: str = Field(..., pattern="^(system|user|assistant|tool)$")
+    content: str | list[dict[str, Any]] | None = None
+    name: Optional[str] = None
+    tool_calls: Optional[list[dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -17,6 +20,14 @@ class ChatRequest(BaseModel):
     frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
     presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
     stop: Optional[list[str]] = None
+    tools: Optional[list[dict[str, Any]]] = None
+    tool_choice: Optional[str | dict[str, Any]] = None
+    response_format: Optional[dict[str, Any]] = None
+    n: int = Field(default=1, ge=1, le=10)
+    logprobs: Optional[bool] = None
+    top_logprobs: Optional[int] = Field(default=None, ge=0, le=20)
+    seed: Optional[int] = None
+    enable_thinking: Optional[bool] = None
 
 
 class ChatResponse(BaseModel):
