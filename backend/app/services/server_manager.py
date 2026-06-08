@@ -122,7 +122,7 @@ class ServerManager:
         dtype = config.get("dtype", "auto")
 
         # AWQ only supports float16, force it if dtype is auto or bfloat16
-        if quant and "awq" in quant.lower():
+        if quant and quant != "auto" and "awq" in quant.lower():
             if dtype in ("auto", "bfloat16", "bf16"):
                 dtype = "float16"
                 self._log_lines.append("[FIX] AWQ requires float16, forced --dtype float16")
@@ -131,7 +131,7 @@ class ServerManager:
             cmd.append("--enable-multimodal")
         if config.get("trust_remote_code"):
             cmd.append("--trust-remote-code")
-        if quant:
+        if quant and quant != "auto":
             cmd.extend(["--quantization", quant])
         if dtype:
             cmd.extend(["--dtype", dtype])
