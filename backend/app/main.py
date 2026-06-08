@@ -34,6 +34,8 @@ class SPAStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{__version__}")
     await init_db()
+    from app.services.auth_service import auth_service
+    await auth_service.ensure_default_admin()
     await metrics_collector.start()
     asyncio.create_task(_metrics_broadcaster())
 

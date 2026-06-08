@@ -1,5 +1,8 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
+
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class Settings(BaseSettings):
@@ -12,6 +15,20 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./sglang_commander.db"
     setup_complete_file: str = ".setup_complete"
+
+    @property
+    def resolved_database_url(self) -> str:
+        url = self.database_url
+        if url.startswith("sqlite+aiosqlite:///./"):
+            filename = url.replace("sqlite+aiosqlite:///./", "")
+            return f"sqlite+aiosqlite:///{os.path.join(_BASE_DIR, filename)}"
+        return url
+
+    @property
+    def resolved_setup_complete_file(self) -> str:
+        if os.path.isabs(self.setup_complete_file):
+            return self.setup_complete_file
+        return os.path.join(_BASE_DIR, self.setup_complete_file)
 
     jwt_secret_key: str = "change-me-to-a-secure-random-string"
     jwt_algorithm: str = "HS256"

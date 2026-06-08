@@ -16,7 +16,12 @@ from app.models.api_key import ApiKey
 
 class AuthService:
     async def is_setup_complete(self) -> bool:
-        return os.path.exists(settings.setup_complete_file)
+        setup_file = settings.resolved_setup_complete_file
+        if not os.path.exists(setup_file):
+            return False
+        async with async_session_factory() as db:
+            result = await db.execute(select(User).limit(1))
+            return result.scalar_one_or_none() is not None
 
     def _save_env_var(self, key: str, value: str) -> None:
         env_path = ".env"
@@ -54,7 +59,7 @@ class AuthService:
             db.add(session)
             await db.commit()
 
-            with open(settings.setup_complete_file, "w") as f:
+            with open(settings.resolved_setup_complete_file, "w") as f:
                 f.write(f"setup_at={datetime.now(timezone.utc).isoformat()}\n")
 
             if huggingface_token:
@@ -188,6 +193,45 @@ class AuthService:
                     "created_at": user.created_at,
                 }
             return None
+
+    async def reset_database(self) -> dict:
+        setup_file = settings.resolved_setup_complete_file
+        db_url = settings.resolved_database_url
+        db_path = db_url.replace("sqlite+aiosqlite:///", "")
+
+        removed = []
+        if os.path.exists(setup_file):
+            os.remove(setup_file)
+            removed.append(setup_file)
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            removed.append(db_path)
+
+        from app.core.database import init_db
+        await init_db()
+
+        return {
+            "status": "reset",
+            "removed": removed,
+            "message": "Database and setup marker deleted. Restart backend, then go to /setup to create admin.",
+        }
+
+    async def ensure_default_admin(self) -> None:
+        async with async_session_factory() as db:
+            result = await db.execute(select(User).limit(1))
+            if result.scalar_one_or_none() is None:
+                user = User(
+                    username="admin",
+                    email="admin@sglang-commander.local",
+                    password_hash=hash_password("admin"),
+                    is_admin=True,
+                )
+                db.add(user)
+                await db.commit()
+                setup_file = settings.resolved_setup_complete_file
+                if not os.path.exists(setup_file):
+                    with open(setup_file, "w") as f:
+                        f.write(f"auto_created_at={datetime.now(timezone.utc).isoformat()}\n")
 
 
 auth_service = AuthService()

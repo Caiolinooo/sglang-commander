@@ -83,3 +83,8 @@ async def revoke_api_key(
     if not success:
         raise HTTPException(status_code=404, detail="API key not found")
     return {"status": "revoked"}
+
+
+@router.post("/reset")
+async def reset_database():
+    return await auth_service.reset_database()
