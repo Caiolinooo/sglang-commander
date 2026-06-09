@@ -53,24 +53,37 @@ export default function ServerConfigPanel() {
   }
 
   const buildCommandPreview = () => {
-    const parts = ['python3 -m sglang.launch_server']
-    if (config.model_path) parts.push(`--model-path "${config.model_path}"`)
-    if (config.host) parts.push(`--host ${config.host}`)
-    if (config.port) parts.push(`--port ${config.port}`)
-    if (config.tensor_parallel_size > 1) parts.push(`--tensor-parallel-size ${config.tensor_parallel_size}`)
-    if (config.quantization && config.quantization !== 'None') parts.push(`--quantization ${config.quantization}`)
-    if (config.dtype && config.dtype !== 'auto') parts.push(`--dtype ${config.dtype}`)
-    if (config.context_length) parts.push(`--context-length ${config.context_length}`)
-    if (config.enable_multimodal) parts.push('--enable-multimodal')
-    if (config.trust_remote_code) parts.push('--trust-remote-code')
-    
-    // Add some key advanced args if they differ from default
-    if (advanced.mem_fraction_static !== 0.88) parts.push(`--mem-fraction-static ${advanced.mem_fraction_static}`)
-    if (advanced.cpu_offload_gb > 0) parts.push(`--cpu-offload-gb ${advanced.cpu_offload_gb}`)
-    if (advanced.speculative_algorithm) parts.push(`--speculative-algorithm ${advanced.speculative_algorithm}`)
-    if (advanced.kv_cache_dtype) parts.push(`--kv-cache-dtype ${advanced.kv_cache_dtype}`)
-    parts.push('--enable-metrics')
-    return parts.join(' \\\n  ')
+    if (config.backend_type === 'llamacpp') {
+      const parts = ['llama-server']
+      if (config.host) parts.push(`--host ${config.host}`)
+      if (config.port) parts.push(`--port ${config.port}`)
+      if (config.model_path) parts.push(`--model "${config.model_path}"`)
+      if (config.context_length) parts.push(`--ctx-size ${config.context_length}`)
+      if (config.custom_args) parts.push(config.custom_args)
+      return parts.join(' \\\n  ')
+    } else if (config.backend_type === 'ollama') {
+      return `ollama run ${config.model_path || 'model_name'}`
+    } else {
+      const parts = ['python3 -m sglang.launch_server']
+      if (config.model_path) parts.push(`--model-path "${config.model_path}"`)
+      if (config.host) parts.push(`--host ${config.host}`)
+      if (config.port) parts.push(`--port ${config.port}`)
+      if (config.tensor_parallel_size > 1) parts.push(`--tensor-parallel-size ${config.tensor_parallel_size}`)
+      if (config.quantization && config.quantization !== 'None') parts.push(`--quantization ${config.quantization}`)
+      if (config.dtype && config.dtype !== 'auto') parts.push(`--dtype ${config.dtype}`)
+      if (config.context_length) parts.push(`--context-length ${config.context_length}`)
+      if (config.enable_multimodal) parts.push('--enable-multimodal')
+      if (config.trust_remote_code) parts.push('--trust-remote-code')
+      
+      // Add some key advanced args if they differ from default
+      if (advanced.mem_fraction_static !== 0.88) parts.push(`--mem-fraction-static ${advanced.mem_fraction_static}`)
+      if (advanced.cpu_offload_gb > 0) parts.push(`--cpu-offload-gb ${advanced.cpu_offload_gb}`)
+      if (advanced.speculative_algorithm) parts.push(`--speculative-algorithm ${advanced.speculative_algorithm}`)
+      if (advanced.kv_cache_dtype) parts.push(`--kv-cache-dtype ${advanced.kv_cache_dtype}`)
+      parts.push('--enable-metrics')
+      if (config.custom_args) parts.push(config.custom_args)
+      return parts.join(' \\\n  ')
+    }
   }
 
   return (
@@ -81,14 +94,26 @@ export default function ServerConfigPanel() {
         </h3>
         
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-text-muted">Model Path (HuggingFace repo or local path)</label>
-            <Input 
-              value={config.model_path} 
-              onChange={e => update('model_path', e.target.value)} 
-              placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct" 
-              className="h-9 font-mono text-xs"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select 
+              label="Backend Engine"
+              options={[
+                { value: 'sglang', label: 'SGLang', desc: 'High-throughput engine (GPU only)' },
+                { value: 'llamacpp', label: 'llama.cpp', desc: 'Lightweight runner (CPU/GPU, GGUF)' },
+                { value: 'ollama', label: 'Ollama', desc: 'Ollama local runner' },
+              ]}
+              value={config.backend_type}
+              onChange={v => update('backend_type', v)}
             />
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-text-muted">Model Path (HuggingFace repo or local path)</label>
+              <Input 
+                value={config.model_path} 
+                onChange={e => update('model_path', e.target.value)} 
+                placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct" 
+                className="h-9 font-mono text-xs"
+              />
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -184,6 +209,19 @@ export default function ServerConfigPanel() {
                     <option value="NGRAM">N-gram</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="pt-2 border-t border-border space-y-1.5">
+                <label className="text-xs font-semibold text-text-muted">Custom CLI Flags / Extra Arguments (passed directly to engine)</label>
+                <textarea 
+                  value={config.custom_args || ''} 
+                  onChange={e => update('custom_args', e.target.value)} 
+                  placeholder="e.g. -t 8 --threads-batch 16 -b 3128 -ub 846 --reasoning-budget 2516 --n-gpu-layers 99" 
+                  className="w-full h-20 px-3 py-2 rounded-lg bg-surface-2 border border-border text-xs font-mono text-text focus:outline-none focus:border-primary placeholder:text-text-muted/40 resize-y"
+                />
+                <p className="text-[10px] text-text-muted">
+                  These arguments are split using shell rules and appended directly to the command line. Use this to pass parameters like threads, layers offloading, and reasoning budgets.
+                </p>
               </div>
             </div>
           )}

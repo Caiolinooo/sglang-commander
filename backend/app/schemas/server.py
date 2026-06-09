@@ -46,6 +46,8 @@ class ServerStartRequest(BaseModel):
     # Pipeline parallelism
     pp_size: Optional[int] = Field(default=None, ge=1, description="Pipeline parallelism size")
 
+    backend_type: Optional[str] = Field(default="sglang", description="Backend type: sglang, llamacpp, or ollama")
+    custom_args: Optional[str] = Field(default=None, description="Raw CLI flags (like -t 8 --threads-batch 16) to append to the start command")
     extra_args: dict[str, Any] = Field(default_factory=dict)
 
 

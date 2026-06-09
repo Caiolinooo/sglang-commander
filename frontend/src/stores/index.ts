@@ -130,6 +130,8 @@ interface ServerState {
     context_length: number
     enable_multimodal: boolean
     trust_remote_code: boolean
+    custom_args: string
+    backend_type: string
     extra_args: Record<string, unknown>
   }
   advanced: AdvancedConfig
@@ -172,6 +174,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
   config: {
     model_path: '', host: '127.0.0.1', port: 30000, tensor_parallel_size: 1,
     quantization: '', dtype: 'auto', context_length: 0, enable_multimodal: false, trust_remote_code: false,
+    custom_args: '', backend_type: 'sglang',
     extra_args: {},
   },
   advanced: {
@@ -259,6 +262,8 @@ export const useServerStore = create<ServerState>((set, get) => ({
         context_length: (args.context_length as number) || 0,
         enable_multimodal: (args.enable_multimodal as boolean) || false,
         trust_remote_code: (args.trust_remote_code as boolean) || false,
+        custom_args: (args.custom_args as string) || '',
+        backend_type: (args.backend_type as string) || 'sglang',
         extra_args: args.extra_args as Record<string, unknown> || {},
       },
       selectedModel: null,
@@ -279,6 +284,8 @@ export const useServerStore = create<ServerState>((set, get) => ({
         trust_remote_code: true,
         enable_multimodal: model.is_moe ? false : (model.architectures?.some(a => a.toLowerCase().includes('vision') || a.toLowerCase().includes('conditional')) || false),
         tensor_parallel_size: get().config.tensor_parallel_size,
+        custom_args: '',
+        backend_type: 'sglang',
         extra_args: {}
       },
       tab: 'config'

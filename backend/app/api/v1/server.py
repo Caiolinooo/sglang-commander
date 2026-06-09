@@ -21,7 +21,7 @@ async def start_server(
         quantization=req.quantization or "",
         dtype=req.dtype or "auto",
     )
-    if validation.get("errors"):
+    if req.backend_type == "sglang" and validation.get("errors"):
         raise HTTPException(
             status_code=400,
             detail={

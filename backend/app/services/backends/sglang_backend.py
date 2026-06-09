@@ -228,6 +228,16 @@ class SglangBackend(BackendProvider):
         if "--enable-metrics" not in cmd:
             cmd.append("--enable-metrics")
 
+        # Raw custom args passthrough
+        custom_args = config.get("custom_args")
+        if custom_args:
+            import shlex
+            try:
+                parsed_args = shlex.split(custom_args)
+                cmd.extend(parsed_args)
+            except Exception as e:
+                self._log_lines.append(f"[WARN] Failed to parse custom_args: {e}")
+
         return cmd
 
     # ------------------------------------------------------------------
