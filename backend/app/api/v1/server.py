@@ -4,6 +4,8 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.server import ServerStartRequest, ServerStatusResponse
 from app.services.server_manager import server_manager
+from app.services.model_manager import model_manager, _estimate_vram_gb
+from app.services.model_manager import model_manager
 
 router = APIRouter()
 
@@ -13,10 +15,51 @@ async def start_server(
     req: ServerStartRequest,
     current_user: User = Depends(get_current_user),
 ):
+    # Run pre-start validation
+    validation = await model_manager.validate_model_config(
+        model_path=req.model_path,
+        quantization=req.quantization or "",
+        dtype=req.dtype or "auto",
+    )
+    if validation.get("errors"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Model configuration has errors",
+                "errors": validation["errors"],
+                "warnings": validation.get("warnings", []),
+                "suggestions": validation.get("suggestions", []),
+                "model_info": validation.get("model_info"),
+            }
+        )
+
     result = await server_manager.start(req.model_dump())
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result
+
+
+@router.post("/validate")
+async def validate_model(
+    req: ServerStartRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Validate a model configuration without starting the server."""
+    return await model_manager.validate_model_config(
+        model_path=req.model_path,
+        quantization=req.quantization or "",
+        dtype=req.dtype or "auto",
+        extra={
+            "context_length": req.context_length,
+            "tensor_parallel_size": req.tensor_parallel_size,
+            "ep_size": req.ep_size,
+            "pp_size": req.pp_size,
+            "speculative_algorithm": req.speculative_algorithm,
+            "enable_dp_attention": req.enable_dp_attention,
+            "cpu_offload_gb": req.cpu_offload_gb,
+            "mem_fraction_static": req.mem_fraction_static,
+        },
+    )
 
 
 @router.post("/stop")
@@ -24,13 +67,84 @@ async def stop_server(current_user: User = Depends(get_current_user)):
     return await server_manager.stop()
 
 
-@router.post("/restart")
+@router.post("/vram-estimate")
+async def vram_estimate(req: dict):
+    """Calculate detailed VRAM estimate from config without starting the server."""
+    params_b = req.get("params_billions", 0)
+    quant = req.get("quantization", "")
+    context_length = req.get("context_length", 4096)
+    dtype = req.get("dtype", "auto")
+    cpu_offload_gb = req.get("cpu_offload_gb", 0)
+    tp = req.get("tensor_parallel_size", 1)
+    ep = req.get("ep_size", 1)
+    kv_cache_dtype = req.get("kv_cache_dtype", "auto")
+    max_running = req.get("max_running_requests", 2)
+    mem_fraction = req.get("mem_fraction_static", 0.88)
+
+    # Get GPU info
+    gpu = model_manager._get_gpu()
+    total_gb = gpu.get("total_gb", 0)
+    free_gb = gpu.get("free_gb", 0)
+
+    # Model weights
+    bytes_per_param = 2.0
+    q = quant.lower()
+    if any(x in q for x in ["awq", "gptq", "int4"]):
+        bytes_per_param = 0.5
+    elif "fp8" in q or "int8" in q:
+        bytes_per_param = 1.0
+    elif q in ("fp16", "bf16", "half", ""):
+        bytes_per_param = 2.0
+    elif "fp32" in q:
+        bytes_per_param = 4.0
+    if dtype == "float32":
+        bytes_per_param = 4.0
+
+    raw_weights = params_b * bytes_per_param
+    model_weights = raw_weights / max(1, tp) / max(1, ep)
+    cpu_offloaded = min(cpu_offload_gb, model_weights)
+    weights_on_gpu = max(0, model_weights - cpu_offloaded)
+
+    # KV Cache
+    kv_bytes = 2.0
+    if "fp4" in kv_cache_dtype.lower():
+        kv_bytes = 0.5
+    elif "fp8" in kv_cache_dtype.lower():
+        kv_bytes = 1.0
+    kv_base = 2.0
+    kv_cache = kv_base * (max(1, context_length) / 4096) * (max(1, params_b) / 7) * (kv_bytes / 2.0) / max(1, tp)
+    kv_cache = min(kv_cache, total_gb * mem_fraction)
+
+    # Activations
+    act = 0.5 * max(1, max_running) * (max(1, params_b) / 7) / max(1, tp)
+
+    # Overhead
+    overhead = 1.5
+
+    total = weights_on_gpu + kv_cache + act + overhead
+    fits = total <= free_gb * 0.95
+
+    return {
+        "gpu": gpu,
+        "weights": round(weights_on_gpu, 2),
+        "weights_raw": round(raw_weights, 2),
+        "cpu_offloaded": round(cpu_offloaded, 2),
+        "kv_cache": round(kv_cache, 2),
+        "activations": round(act, 2),
+        "overhead": overhead,
+        "total": round(total, 2),
+        "free_before": round(free_gb, 2),
+        "free_after": round(total_gb - total, 2),
+        "fits": fits,
+        "bytes_per_param": bytes_per_param,
+        "kv_bytes_per_elem": kv_bytes,
+        "warnings": [],
+    }
 async def restart_server(
-    req: ServerStartRequest = None,
+    req: dict | None = None,
     current_user: User = Depends(get_current_user),
 ):
-    config = req.model_dump() if req else None
-    return await server_manager.restart(config)
+    return await server_manager.restart(req)
 
 
 @router.get("/status", response_model=ServerStatusResponse)

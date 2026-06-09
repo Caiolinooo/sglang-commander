@@ -1,0 +1,17 @@
+[Unit]
+Description=SGLang Commander Server
+After=network.target
+
+[Service]
+Type=simple
+User=Caio
+WorkingDirectory=/home/Caio/sglang-commander
+ExecStart=/home/Caio/sglang-commander/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+Environment=HOST=0.0.0.0
+Environment=PORT=8000
+Environment=PRODUCTION=true
+
+[Install]
+WantedBy=multi-user.target

@@ -147,7 +147,16 @@ class AuthService:
             api_key = ApiKey(user_id=user_id, name=name, key=key, scopes=scopes)
             db.add(api_key)
             await db.commit()
-            return {"id": api_key.id, "name": name, "key": key, "scopes": scopes}
+            await db.refresh(api_key)
+            return {
+                "id": api_key.id,
+                "name": name,
+                "key": key,
+                "scopes": scopes,
+                "is_active": api_key.is_active,
+                "last_used_at": api_key.last_used_at,
+                "created_at": api_key.created_at,
+            }
 
     async def list_api_keys(self, user_id: int) -> list[dict]:
         async with async_session_factory() as db:
@@ -179,6 +188,12 @@ class AuthService:
             key.is_active = False
             await db.commit()
             return True
+
+    async def logout(self, user_id: int) -> None:
+        from app.models.session import Session
+        async with async_session_factory() as db:
+            await db.execute(Session.__table__.delete().where(Session.user_id == user_id))
+            await db.commit()
 
     async def get_user(self, user_id: int) -> Optional[dict]:
         async with async_session_factory() as db:

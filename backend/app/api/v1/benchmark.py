@@ -10,8 +10,6 @@ router = APIRouter()
 
 
 class BenchmarkRunRequest(BaseModel):
-    host: str = Field(default="127.0.0.1")
-    port: int = Field(default=30000, ge=1024, le=65535)
     prompt: str = Field(default="What is the capital of France?")
     max_tokens: int = Field(default=100, ge=1, le=4096)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -25,8 +23,6 @@ async def run_benchmark(
     current_user: User = Depends(get_current_user),
 ):
     result = await benchmark_service.run_benchmark(
-        host=req.host,
-        port=req.port,
         prompt=req.prompt,
         max_tokens=req.max_tokens,
         temperature=req.temperature,

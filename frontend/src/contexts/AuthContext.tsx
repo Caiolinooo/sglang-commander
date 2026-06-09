@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { User } from '../types'
-import { getMe, checkSetupStatus } from '../api/endpoints'
+import { getMe, checkSetupStatus, logout as apiLogout } from '../api/endpoints'
 
 interface AuthContextType {
   user: User | null
@@ -54,9 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSetupComplete(true)
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try { await apiLogout() } catch {}
     localStorage.clear()
     setUser(null)
+    window.location.href = '/login'
   }
 
   return (

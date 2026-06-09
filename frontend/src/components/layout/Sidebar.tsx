@@ -1,7 +1,27 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { LayoutDashboard, Server, MessageSquare, Box, FileText, Timer, Globe, Settings, Sun, Moon, LogOut, TerminalSquare, Shield, Activity } from 'lucide-react'
+import { useConnectionsStore } from '../../stores'
+import {
+  LayoutDashboard,
+  Server,
+  MessageSquare,
+  Box,
+  FileText,
+  Timer,
+  Globe,
+  Settings,
+  Sun,
+  Moon,
+  LogOut,
+  TerminalSquare,
+  Shield,
+  Activity,
+  GitCompare,
+  FileSpreadsheet,
+  Network
+} from 'lucide-react'
 
 const sections = [
   {
@@ -10,6 +30,13 @@ const sections = [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/server', label: 'Server Control', icon: Server },
       { to: '/chat', label: 'Playground Chat', icon: MessageSquare },
+      { to: '/compare', label: 'Compare Models', icon: GitCompare },
+    ]
+  },
+  {
+    title: 'Automation',
+    items: [
+      { to: '/batch', label: 'Batch Processing', icon: FileSpreadsheet },
     ]
   },
   {
@@ -17,6 +44,7 @@ const sections = [
     items: [
       { to: '/models', label: 'Models Hub', icon: Box },
       { to: '/profiles', label: 'Server Profiles', icon: FileText },
+      { to: '/connections', label: 'SSH Connections', icon: Network },
       { to: '/benchmark', label: 'Benchmark Latency', icon: Timer },
     ]
   },
@@ -33,6 +61,13 @@ const sections = [
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { connections, activeConnectionId, setActiveConnection, loadConnections } = useConnectionsStore()
+
+  useEffect(() => {
+    loadConnections()
+  }, [])
+
+  const activeConn = connections.find(c => c.id === activeConnectionId)
 
   return (
     <div className="w-64 h-full bg-surface border-r border-border flex flex-col transition-colors z-20 shrink-0">
@@ -52,8 +87,31 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Global Connection Selector */}
+      <div className="px-4 pt-4 pb-2 border-b border-border/60">
+        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest opacity-60 px-1 block mb-2">
+          Environment target
+        </label>
+        <select
+          value={activeConnectionId || ''}
+          onChange={(e) => setActiveConnection(e.target.value || null)}
+          className="w-full h-8 px-2 rounded-lg bg-surface-2 border border-border text-xs text-text focus:outline-none focus:border-primary cursor-pointer font-medium"
+        >
+          <option value="">Localhost (127.0.0.1)</option>
+          {connections.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} ({c.host})
+            </option>
+          ))}
+        </select>
+        <div className="mt-1 px-1 flex items-center gap-1.5 text-[9px] font-medium text-text-muted">
+          <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? 'bg-info' : 'bg-success animate-pulse'}`} />
+          <span>Target: {activeConnectionId ? `Remote SSH (${activeConn?.name})` : 'Local Engine'}</span>
+        </div>
+      </div>
+
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto scrollbar-thin">
+      <nav className="flex-1 px-4 py-4 space-y-5 overflow-y-auto scrollbar-thin">
         {sections.map((section) => (
           <div key={section.title} className="space-y-1.5">
             <h3 className="px-3 text-[10px] font-bold text-text-muted uppercase tracking-widest opacity-60">
@@ -131,4 +189,3 @@ export default function Sidebar() {
     </div>
   )
 }
-

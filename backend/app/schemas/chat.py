@@ -28,6 +28,8 @@ class ChatRequest(BaseModel):
     top_logprobs: Optional[int] = Field(default=None, ge=0, le=20)
     seed: Optional[int] = None
     enable_thinking: Optional[bool] = None
+    rag_collection: Optional[str] = None
+    rag_top_k: Optional[int] = Field(5, ge=1, le=50)
 
 
 class ChatResponse(BaseModel):

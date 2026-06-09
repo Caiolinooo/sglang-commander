@@ -1,27 +1,62 @@
-import { useState, useRef } from 'react'
-import { runBenchmark, cancelBenchmark } from '../api/endpoints'
+import { useState, useRef, useEffect } from 'react'
+import { runBenchmark, cancelBenchmark, getBenchmarkStatus, getServerStatus } from '../api/endpoints'
 import type { BenchmarkResult } from '../types'
-import { Activity, Play, Square, BarChart, List, Terminal, Hash, Clock, Zap } from 'lucide-react'
+import { Activity, Play, Square, BarChart, List, Terminal, Hash, Clock, Zap, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
 
 export default function BenchmarkPage() {
-  const [config, setConfig] = useState({ host: '127.0.0.1', port: 30000, prompt: 'What is the capital of France?', max_tokens: 100, temperature: 0.7, num_runs: 10, concurrency: 1 })
+  const [config, setConfig] = useState({
+    prompt: 'What is the capital of France?',
+    max_tokens: 100,
+    temperature: 0.7,
+    num_runs: 10,
+    concurrency: 1,
+  })
   const [result, setResult] = useState<BenchmarkResult | null>(null)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [serverModel, setServerModel] = useState<string>('')
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+  useEffect(() => {
+    getServerStatus().then(r => {
+      const mp = r.data.model_path
+      if (mp) setServerModel(mp.split('/').pop() || mp)
+    }).catch(() => {})
+  }, [])
 
   const update = (f: string, v: unknown) => setConfig(p => ({ ...p, [f]: v }))
 
   const handleRun = async () => {
-    setRunning(true); setProgress(0); setResult(null)
-    try { const r = await runBenchmark(config); setResult(r.data) } catch {}
-    finally { setRunning(false); setProgress(100); if (pollRef.current) clearInterval(pollRef.current) }
+    setRunning(true); setProgress(0); setResult(null); setError(null)
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await getBenchmarkStatus()
+        if (s.data.progress > 0) setProgress(s.data.progress)
+      } catch {}
+    }, 500)
+    try {
+      const r = await runBenchmark(config)
+      setResult(r.data)
+      setProgress(100)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Benchmark failed'
+      setError(msg)
+    } finally {
+      setRunning(false)
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = undefined }
+    }
   }
 
-  const handleCancel = async () => { try { await cancelBenchmark() } catch {}; setRunning(false); if (pollRef.current) clearInterval(pollRef.current) }
+  const handleCancel = async () => {
+    try { await cancelBenchmark() } catch {}
+    setRunning(false)
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = undefined }
+  }
 
   return (
     <div className="p-8 space-y-6 animate-in max-w-5xl mx-auto">
@@ -37,6 +72,20 @@ export default function BenchmarkPage() {
         )}
       </div>
 
+      {serverModel && (
+        <div className="flex items-center gap-2 text-sm text-text-muted">
+          <span>Targeting:</span>
+          <Badge variant="outline" className="font-mono">{serverModel}</Badge>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -47,13 +96,16 @@ export default function BenchmarkPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[['Host', 'host'], ['Port', 'port'], ['Runs', 'num_runs'], ['Concurrency', 'concurrency']].map(([l, f]) => (
+            {[['Runs', 'num_runs', 'number'], ['Concurrency', 'concurrency', 'number'], ['Max Tokens', 'max_tokens', 'number'], ['Temperature', 'temperature', 'number']].map(([l, f, t]) => (
               <div key={f}>
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">{l}</label>
-                <Input 
-                  type={f === 'host' ? 'text' : 'number'} 
+                <Input
+                  type={t}
+                  min={f === 'temperature' ? 0 : 1}
+                  max={f === 'temperature' ? 2 : f === 'concurrency' ? 10 : f === 'num_runs' ? 100 : 4096}
+                  step={f === 'temperature' ? 0.1 : 1}
                   value={config[f as keyof typeof config] as string | number}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(f, f === 'host' ? e.target.value : Number(e.target.value))}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => update(f, Number(e.target.value))}
                 />
               </div>
             ))}
@@ -61,17 +113,17 @@ export default function BenchmarkPage() {
 
           <div>
             <label className="text-xs font-medium text-text-muted mb-1.5 block">Prompt</label>
-            <textarea 
-              value={config.prompt} 
-              onChange={e => update('prompt', e.target.value)} 
+            <textarea
+              value={config.prompt}
+              onChange={e => update('prompt', e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none" 
+              className="w-full px-3 py-2 rounded-lg bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none"
             />
           </div>
 
           <div className="flex gap-3 pt-2">
             <Button onClick={handleRun} disabled={running} className="gap-2 w-full sm:w-auto">
-              {running ? <Activity className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} 
+              {running ? <Activity className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               {running ? 'Running...' : 'Run Benchmark'}
             </Button>
             <Button variant="secondary" onClick={handleCancel} disabled={!running} className="gap-2 w-full sm:w-auto">
@@ -119,6 +171,12 @@ export default function BenchmarkPage() {
                   </div>
                 ))}
               </div>
+              {result.summary.errors > 0 && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-danger">
+                  <AlertTriangle className="h-4 w-4" />
+                  {result.summary.errors} run(s) failed
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -138,14 +196,22 @@ export default function BenchmarkPage() {
                         <th className="text-left py-2.5 px-4 font-medium">Run</th>
                         <th className="text-right py-2.5 px-4 font-medium">Latency (ms)</th>
                         <th className="text-right py-2.5 px-4 font-medium">Tokens</th>
+                        <th className="text-right py-2.5 px-4 font-medium">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {result.runs.map(r => (
-                        <tr key={r.run} className="hover:bg-surface transition-colors">
+                        <tr key={r.run} className={`hover:bg-surface transition-colors ${r.error ? 'bg-danger/5' : ''}`}>
                           <td className="py-2 px-4 font-mono">{r.run}</td>
-                          <td className="text-right py-2 px-4 font-mono">{r.latency_ms}</td>
-                          <td className="text-right py-2 px-4 font-mono">{r.tokens_generated}</td>
+                          <td className="text-right py-2 px-4 font-mono">{r.latency_ms || '--'}</td>
+                          <td className="text-right py-2 px-4 font-mono">{r.tokens_generated || '--'}</td>
+                          <td className="text-right py-2 px-4">
+                            {r.error ? (
+                              <span className="text-danger text-xs" title={r.error}>Error</span>
+                            ) : (
+                              <span className="text-success text-xs">OK</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -2,12 +2,14 @@ import asyncio
 import logging
 import os
 import sys
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import __version__
 from app.api.v1.router import router as api_router
@@ -16,7 +18,7 @@ from app.core.database import init_db
 from app.services.metrics_collector import metrics_collector
 from app.websocket.manager import ws_manager
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -30,9 +32,32 @@ class SPAStaticFiles(StaticFiles):
             raise ex
 
 
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Attach a unique request ID to each request for tracing."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{__version__}")
+
+    # Log security status
+    if settings.jwt_secret_key and len(settings.jwt_secret_key) < 32:
+        logger.warning("JWT_SECRET is too short. Set a strong secret in .env")
+
+    # Log detected environment
+    cuda = settings.resolved_cuda_home
+    venv = settings.resolved_venv_path
+    logger.info(f"CUDA_HOME: {cuda or 'not detected'}")
+    logger.info(f"VENV: {venv or 'not detected'}")
+    logger.info(f"CORS origins: {settings.cors_origins_list}")
+
     await init_db()
     from app.services.auth_service import auth_service
     await auth_service.ensure_default_admin()
@@ -50,6 +75,8 @@ async def lifespan(app: FastAPI):
     yield
 
     await metrics_collector.stop()
+    from app.services.connection_manager import connection_manager
+    await connection_manager.shutdown_all()
 
 
 app = FastAPI(
@@ -58,9 +85,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Request ID middleware (must be added before CORS)
+app.add_middleware(RequestIDMiddleware)
+
+# CORS — configurable, no more wildcard by default
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,7 +136,7 @@ def run():
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        log_level="info",
+        log_level="debug" if settings.debug else "info",
     )
 
 

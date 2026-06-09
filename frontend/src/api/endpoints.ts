@@ -16,12 +16,14 @@ export const createApiKey = (name: string, scopes: string = 'read') =>
   apiClient.post('/auth/api-keys', { name, scopes })
 export const listApiKeys = () => apiClient.get('/auth/api-keys')
 export const revokeApiKey = (keyId: number) => apiClient.delete(`/auth/api-keys/${keyId}`)
+export const logout = () => apiClient.post('/auth/logout')
 
 // Server
 export const startServer = (config: Record<string, unknown>) =>
   apiClient.post('/server/start', config)
 export const stopServer = () => apiClient.post('/server/stop')
-export const restartServer = () => apiClient.post('/server/restart')
+export const restartServer = (config?: Record<string, unknown>) =>
+  apiClient.post('/server/restart', config || {})
 export const getServerStatus = () => apiClient.get<ServerStatus>('/server/status')
 export const getServerLogs = (cursor: number = 0) =>
   apiClient.get(`/server/logs?cursor=${cursor}`)
@@ -46,6 +48,17 @@ export const activateServerProfile = (id: number) =>
 // Chat
 export const chatCompletion = (payload: Record<string, unknown>) =>
   apiClient.post('/chat/completions', payload)
+export const listConversations = () => apiClient.get('/chat/conversations')
+export const createConversation = (title?: string) =>
+  apiClient.post(`/chat/conversations?title=${encodeURIComponent(title || 'New Chat')}`)
+export const deleteConversation = (id: number) =>
+  apiClient.delete(`/chat/conversations/${id}`)
+export const getConversationMessages = (id: number) =>
+  apiClient.get(`/chat/conversations/${id}/messages`)
+export const saveConversationMessages = (id: number, messages: any[]) =>
+  apiClient.post(`/chat/conversations/${id}/messages`, { messages })
+export const updateConversationTitle = (id: number, title: string) =>
+  apiClient.patch(`/chat/conversations/${id}/title`, { title })
 
 // Models
 const buildSearchParams = (filters?: ModelSearchFilters) => {
@@ -85,6 +98,8 @@ export const deployModel = (config: {
   repo_id: string; quantization?: string; dtype?: string; context_length?: number;
   tensor_parallel_size?: number; host?: string; port?: number; trust_remote_code?: boolean;
   tool_call_parser?: string; reasoning_parser?: string; enable_multimodal?: boolean; load_format?: string;
+  speculative_algorithm?: string; speculative_num_steps?: number; speculative_draft_model_path?: string;
+  kv_cache_dtype?: string; cpu_offload_gb?: number; mem_fraction_static?: number; max_running_requests?: number;
 }) => apiClient.post('/models/deploy', config)
 export const getGPUProcesses = () => apiClient.get('/models/gpu-processes')
 export const getGPULiveStatus = () => apiClient.get<GPULiveStatus>('/models/gpu-live')
@@ -94,6 +109,10 @@ export const getModelInfo_ = (repo_id: string) =>
   apiClient.get(`/models/info/${encodeURIComponent(repo_id)}`)
 export const getQuantVariants = (repo_id: string) =>
   apiClient.get<{ variants: Array<{ repo_id: string; quantization: string; downloads: number; likes: number; params_billions: number | null }>; total: number }>(`/models/variants/${encodeURIComponent(repo_id)}`)
+export const getModelConfig = (repo_id: string) =>
+  apiClient.get(`/models/config/${encodeURIComponent(repo_id)}`)
+export const getDeploymentRecommendations = (repo_id: string) =>
+  apiClient.get(`/models/recommendations/${encodeURIComponent(repo_id)}`)
 export const validateHFToken = () => apiClient.get('/models/validate-token')
 export const getGPUInfo = () => apiClient.get<GPUInfo>('/models/gpu')
 

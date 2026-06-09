@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate, saveHuggingFaceToken, validateHFToken } from '../api/endpoints'
-import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search, Key } from 'lucide-react'
+import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate, saveHuggingFaceToken, validateHFToken, restartProject, restartAndRebuild } from '../api/endpoints'
+import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search, Key, RotateCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [hfStatus, setHfStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [hfValidation, setHfValidation] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
   const [hfUser, setHfUser] = useState<{ name?: string; email?: string }>({})
+  const [restartStatus, setRestartStatus] = useState<'idle' | 'restarting' | 'error'>('idle')
+  const [rebuildStatus, setRebuildStatus] = useState<'idle' | 'rebuilding' | 'error'>('idle')
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   useEffect(() => { getSettings().then(r => setSettings(r.data)).catch(() => {}) }, [])
@@ -74,6 +76,42 @@ export default function SettingsPage() {
       if (r.data.valid) { setHfValidation('valid'); setHfUser({ name: r.data.name, email: r.data.email }) }
       else { setHfValidation('invalid') }
     } catch { setHfValidation('invalid') }
+  }
+
+  const handleRestart = async () => {
+    setRestartStatus('restarting')
+    try {
+      await restartProject()
+      const poll = setInterval(async () => {
+        try {
+          await getSettings()
+          clearInterval(poll)
+          window.location.reload()
+        } catch {}
+      }, 2000)
+      setTimeout(() => { clearInterval(poll); window.location.reload() }, 30000)
+    } catch {
+      setRestartStatus('error')
+      setTimeout(() => setRestartStatus('idle'), 3000)
+    }
+  }
+
+  const handleRebuildAndRestart = async () => {
+    setRebuildStatus('rebuilding')
+    try {
+      await restartAndRebuild()
+      const poll = setInterval(async () => {
+        try {
+          await getSettings()
+          clearInterval(poll)
+          window.location.reload()
+        } catch {}
+      }, 3000)
+      setTimeout(() => { clearInterval(poll); window.location.reload() }, 60000)
+    } catch {
+      setRebuildStatus('error')
+      setTimeout(() => setRebuildStatus('idle'), 3000)
+    }
   }
 
   return (
@@ -286,6 +324,75 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-warning/30">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <RotateCw className="w-5 h-5 text-warning" />
+            <CardTitle>Server Control</CardTitle>
+          </div>
+          <CardDescription>Restart or rebuild the SGLang Commander backend server.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Restart only */}
+          <div className="flex items-center justify-between p-4 bg-surface-2 rounded-xl border border-border">
+            <div>
+              <p className="text-sm font-medium text-text">Quick Restart</p>
+              <p className="text-xs text-text-muted mt-0.5">Restart backend only (fast, ~2s)</p>
+            </div>
+            <Button
+              onClick={handleRestart}
+              disabled={restartStatus === 'restarting' || rebuildStatus === 'rebuilding'}
+              variant="danger"
+              className="gap-2 shrink-0"
+            >
+              {restartStatus === 'restarting' ? (
+                <><RefreshCw className="w-4 h-4 animate-spin" /> Restarting...</>
+              ) : (
+                <><RotateCw className="w-4 h-4" /> Restart</>
+              )}
+            </Button>
+          </div>
+          {restartStatus === 'restarting' && (
+            <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-warning text-xs flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              Restarting... Page will auto-reload.
+            </div>
+          )}
+
+          {/* Rebuild + Restart */}
+          <div className="flex items-center justify-between p-4 bg-surface-2 rounded-xl border border-border">
+            <div>
+              <p className="text-sm font-medium text-text">Rebuild & Restart</p>
+              <p className="text-xs text-text-muted mt-0.5">Build frontend + restart backend (slower, ~15-30s)</p>
+            </div>
+            <Button
+              onClick={handleRebuildAndRestart}
+              disabled={restartStatus === 'restarting' || rebuildStatus === 'rebuilding'}
+              variant="danger"
+              className="gap-2 shrink-0"
+            >
+              {rebuildStatus === 'rebuilding' ? (
+                <><RefreshCw className="w-4 h-4 animate-spin" /> Building...</>
+              ) : (
+                <><RotateCw className="w-4 h-4" /> Rebuild & Restart</>
+              )}
+            </Button>
+          </div>
+          {rebuildStatus === 'rebuilding' && (
+            <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-warning text-xs flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              Building frontend and restarting... This may take a moment.
+            </div>
+          )}
+          {(restartStatus === 'error' || rebuildStatus === 'error') && (
+            <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-xs flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Failed. Check if the backend is running.
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

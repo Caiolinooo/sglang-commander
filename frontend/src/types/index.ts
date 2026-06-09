@@ -58,6 +58,44 @@ export interface HFModel {
   is_moe?: boolean
 }
 
+export interface ModelConfig {
+  repo_id: string
+  model_name: string
+  pipeline_tag?: string
+  library_name?: string
+  tags: string[]
+  architectures: string[]
+  context_length: number
+  quantization_config: Record<string, unknown>
+  num_parameters: Record<string, unknown>
+  format: string
+  quantization: string
+  params_billions?: number
+  vram_estimate_gb: number
+  fits_in_gpu: boolean
+  tokens: TokenEstimate
+  is_multimodal: boolean
+  is_moe: boolean
+  has_mtp_head: boolean
+  mtp_layer_count: number
+  supports_tool_calling: boolean
+  supports_reasoning: boolean
+  gpu: GPUInfo
+  recommended: {
+    tool_call_parser: string
+    reasoning_parser: string
+    enable_multimodal: boolean
+    context_length: number
+    speculative_algorithm: string
+    speculative_num_steps: number | null
+    load_format: string
+    dtype: string
+    kv_cache_dtype: string
+    cpu_offload_gb: number
+  }
+  config: Record<string, unknown>
+}
+
 export interface ZeroTierStatus {
   installed: boolean
   running: boolean

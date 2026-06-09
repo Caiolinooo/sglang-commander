@@ -88,11 +88,31 @@ class MetricsCollector:
         # Scrape sglang Prometheus metrics if server is running
         from app.services.server_manager import server_manager
         status = await server_manager.get_status()
-        if not status.get("running"):
-            return metrics
+        
+        host = None
+        port = None
 
-        host = status.get("host", settings.sglang_default_host)
-        port = status.get("port", settings.sglang_default_port)
+        if status.get("running"):
+            host = status.get("host", settings.sglang_default_host)
+            port = status.get("port", settings.sglang_default_port)
+        else:
+            # Check if we have any active remote SSH tunnels
+            from app.services.connection_manager import connection_manager
+            from app.models.connection import ConnectionProfile
+            from app.core.database import async_session_factory
+            active_ids = list(connection_manager._connections.keys())
+            if active_ids:
+                async with async_session_factory() as db:
+                    result = await db.execute(
+                        select(ConnectionProfile).where(ConnectionProfile.id == active_ids[0])
+                    )
+                    profile = result.scalar_one_or_none()
+                    if profile:
+                        host = "127.0.0.1"
+                        port = profile.local_bind_port
+
+        if not host or not port:
+            return metrics
 
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:

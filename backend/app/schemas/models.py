@@ -101,6 +101,18 @@ class DeployModelRequest(BaseModel):
     reasoning_parser: Optional[str] = None
     enable_multimodal: Optional[bool] = None
     load_format: Optional[str] = None
+    speculative_algorithm: Optional[str] = None
+    speculative_num_steps: Optional[int] = None
+    speculative_draft_model_path: Optional[str] = None
+    kv_cache_dtype: Optional[str] = None
+    cpu_offload_gb: Optional[float] = None
+    mem_fraction_static: Optional[float] = None
+    max_running_requests: Optional[int] = None
+
+
+class DownloadModelRequest(BaseModel):
+    repo_id: str
+    revision: str = "main"
 
 
 class HFSearchRequest(BaseModel):

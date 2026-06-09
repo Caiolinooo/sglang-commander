@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  sglang-commander:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sglang-commander
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=false
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:8000
+      # Auto-generated JWT_SECRET is fine, or set explicitly:
+      # - JWT_SECRET_KEY=your-secure-jwt-secret-key-here
+    restart: unless-stopped

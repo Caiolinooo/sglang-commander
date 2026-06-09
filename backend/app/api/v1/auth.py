@@ -85,6 +85,12 @@ async def revoke_api_key(
     return {"status": "revoked"}
 
 
+@router.post("/logout")
+async def logout(current_user: User = Depends(get_current_user)):
+    await auth_service.logout(current_user.id)
+    return {"status": "logged_out"}
+
+
 @router.post("/reset")
 async def reset_database():
     return await auth_service.reset_database()

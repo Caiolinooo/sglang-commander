@@ -13,14 +13,21 @@ import SettingsPage from './pages/SettingsPage'
 import BenchmarkPage from './pages/BenchmarkPage'
 import ServerProfilesPage from './pages/ServerProfilesPage'
 import DiagnosticsPage from './pages/DiagnosticsPage'
+import BatchPage from './pages/BatchPage'
+import ConnectionsPage from './pages/ConnectionsPage'
+import ComparePage from './pages/ComparePage'
+import CommandPalette from './components/CommandPalette'
+import { ToastContainer } from './components/ui/Toast'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen bg-bg">
+    <div className="flex h-screen bg-bg relative">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>
+      <CommandPalette />
+      <ToastContainer />
     </div>
   )
 }
@@ -31,7 +38,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg">
-        <div className="text-text-muted text-lg animate-pulse">Loading SGLang Commander...</div>
+        <div className="text-text-muted text-lg animate-pulse font-semibold">Loading SGLang Commander...</div>
       </div>
     )
   }
@@ -50,6 +57,9 @@ export default function App() {
       <Route path="/benchmark" element={<ProtectedRoute><AppLayout><BenchmarkPage /></AppLayout></ProtectedRoute>} />
       <Route path="/profiles" element={<ProtectedRoute><AppLayout><ServerProfilesPage /></AppLayout></ProtectedRoute>} />
       <Route path="/diagnostics" element={<ProtectedRoute><AppLayout><DiagnosticsPage /></AppLayout></ProtectedRoute>} />
+      <Route path="/batch" element={<ProtectedRoute><AppLayout><BatchPage /></AppLayout></ProtectedRoute>} />
+      <Route path="/connections" element={<ProtectedRoute><AppLayout><ConnectionsPage /></AppLayout></ProtectedRoute>} />
+      <Route path="/compare" element={<ProtectedRoute><AppLayout><ComparePage /></AppLayout></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

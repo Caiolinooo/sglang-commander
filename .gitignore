@@ -39,3 +39,13 @@ sglang_commander_update.tmp
 *.dmg
 *.AppImage
 build/
+
+# Data (DB, RAG, uploads)
+data/
+uploads/
+*.chroma/
+
+# Virtual environments
+.venv/
+venv/
+env/

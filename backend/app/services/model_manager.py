@@ -8,16 +8,10 @@ from huggingface_hub import HfApi, snapshot_download, scan_cache_dir
 from app.config import settings
 
 
-# Common directories where models might be stored
-_COMMON_MODEL_DIRS = [
-    os.path.expanduser("~/.cache/huggingface/hub"),
-    os.path.expanduser("~/.cache/huggingface/hub/models"),
-    "/home/caio/.cache/huggingface/hub",
-    os.path.expanduser("~/models"),
-    "/data/models",
-    "/home/caio/models",
-    "/mnt/models",
-]
+def _get_model_scan_dirs() -> list[str]:
+    """Get model directories from config (no hardcoded paths)."""
+    return settings.resolved_model_scan_dirs
+
 
 
 hf_api = HfApi(token=settings.huggingface_token)
@@ -239,31 +233,31 @@ class ModelManager:
             gpu = self._get_gpu()
             gpu_total = gpu.get("total_gb", 0)
 
-            # Build HF API search query with filter tags
-            search_parts = [query] if query else []
-            if task:
-                search_parts.append(f"in:pipeline_tag:{task}")
-            if library:
-                search_parts.append(f"in:library_name:{library}")
-            if license_filter:
-                search_parts.append(f"in:license:{license_filter}")
-            if framework:
-                search_parts.append(f"in:framework:{framework}")
-            if language:
-                search_parts.append(f"in:language:{language}")
-            if author:
-                search_parts.append(f"in:author:{author}")
-
-            search_query = " ".join(search_parts) if search_parts else ""
-
-            sort_field = sort_by if sort_by in ("downloads", "likes", "lastModified") else "downloads"
-
+            # Build kwargs for hf_api.list_models (huggingface_hub 1.17.0 API)
             kwargs = {
-                "search": search_query,
-                "sort": sort_field,
-                "direction": sort_dir,
+                "search": query or None,
+                "sort": sort_by if sort_by in ("downloads", "likes", "lastModified") else "downloads",
                 "limit": min(limit * 3, 200),
             }
+
+            # Use dedicated filter params where available
+            if task:
+                kwargs["pipeline_tag"] = task
+            if author:
+                kwargs["author"] = author
+
+            # Build general filter list for remaining filters (library, license, framework, language)
+            filter_parts = []
+            if library:
+                filter_parts.append(f"library_name:{library}")
+            if license_filter:
+                filter_parts.append(f"license:{license_filter}")
+            if framework:
+                filter_parts.append(f"framework:{framework}")
+            if language:
+                filter_parts.append(f"language:{language}")
+            if filter_parts:
+                kwargs["filter"] = filter_parts
 
             models = hf_api.list_models(**kwargs)
             results = []
@@ -370,36 +364,148 @@ class ModelManager:
     async def download_model(self, repo_id: str, revision: str = "main") -> dict:
         task_id = f"{repo_id}@{revision}"
         if task_id in self._download_tasks:
-            return {"status": "already_downloading", "task_id": task_id}
+            info = self._download_tasks[task_id]
+            if info.get("status") == "downloading":
+                return {"status": "already_downloading", "task_id": task_id}
 
         self._download_tasks[task_id] = {
             "status": "downloading",
-            "progress": 0.0,
+            "progress_pct": 0.0,
+            "speed_mb": 0.0,
+            "eta_seconds": 0,
+            "downloaded_mb": 0.0,
+            "total_mb": 0.0,
             "repo_id": repo_id,
         }
 
+        # Spawn download background task
+        asyncio.create_task(self._run_download(repo_id, revision, task_id))
+        return {"status": "started", "task_id": task_id}
+
+    async def _run_download(self, repo_id: str, revision: str, task_id: str):
+        import time
+        from tqdm.auto import tqdm
+        from app.websocket.manager import ws_manager
+
+        # Custom tqdm subclass that intercepts updates
+        class WebsocketProgressTqdm(tqdm):
+            _main_loop = None
+            _callback = None
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                desc = kwargs.get("desc", "")
+                self.filename = desc if desc else "file"
+
+            def update(self, n=1):
+                super().update(n)
+                if WebsocketProgressTqdm._main_loop and WebsocketProgressTqdm._callback:
+                    WebsocketProgressTqdm._main_loop.call_soon_threadsafe(
+                        WebsocketProgressTqdm._callback,
+                        self.filename,
+                        self.n
+                    )
+
+        loop = asyncio.get_running_loop()
+
+        # Try to resolve total repo size in bytes first
+        total_bytes = 0
         try:
-            path = snapshot_download(
+            model_info = await asyncio.to_thread(
+                hf_api.model_info, repo_id, revision=revision, files_metadata=True
+            )
+            total_bytes = sum(f.size for f in model_info.siblings if f.size)
+        except Exception:
+            pass
+
+        file_progress = {}
+        start_time = time.time()
+        self._last_ws_broadcast = 0.0
+
+        def on_progress(filename, downloaded_bytes):
+            file_progress[filename] = downloaded_bytes
+            total_downloaded = sum(file_progress.values())
+
+            elapsed = time.time() - start_time
+            speed = total_downloaded / elapsed if elapsed > 0 else 0
+
+            eff_total = total_bytes if total_bytes > 0 else total_downloaded + 1024
+            pct = min(99.9, (total_downloaded / eff_total) * 100)
+            remaining = max(0, eff_total - total_downloaded)
+            eta = remaining / speed if speed > 0 else 0
+
+            self._download_tasks[task_id].update({
+                "progress_pct": round(pct, 1),
+                "speed_mb": round(speed / (1024 * 1024), 2),
+                "eta_seconds": int(eta),
+                "downloaded_mb": round(total_downloaded / (1024 * 1024), 1),
+                "total_mb": round(eff_total / (1024 * 1024), 1),
+            })
+
+            # Throttle websocket updates to prevent frontend lockups
+            now = time.time()
+            if now - self._last_ws_broadcast > 0.5:
+                self._last_ws_broadcast = now
+                asyncio.run_coroutine_threadsafe(
+                    ws_manager.broadcast({
+                        "type": "model_download_progress",
+                        "data": {
+                            "repo_id": repo_id,
+                            "progress_pct": round(pct, 1),
+                            "speed_mb": round(speed / (1024 * 1024), 2),
+                            "eta_seconds": int(eta),
+                            "downloaded_mb": round(total_downloaded / (1024 * 1024), 1),
+                            "total_mb": round(eff_total / (1024 * 1024), 1),
+                            "status": "downloading"
+                        }
+                    }),
+                    loop
+                )
+
+        WebsocketProgressTqdm._main_loop = loop
+        WebsocketProgressTqdm._callback = on_progress
+
+        try:
+            path = await asyncio.to_thread(
+                snapshot_download,
                 repo_id=repo_id,
                 revision=revision,
                 local_dir_use_symlinks=False,
                 resume_download=True,
                 token=settings.huggingface_token,
+                tqdm_class=WebsocketProgressTqdm
             )
-            self._download_tasks[task_id] = {
+
+            self._download_tasks[task_id].update({
                 "status": "completed",
-                "progress": 100.0,
-                "repo_id": repo_id,
+                "progress_pct": 100.0,
                 "path": path,
-            }
-            return {"status": "completed", "path": path}
+            })
+
+            await ws_manager.broadcast({
+                "type": "model_download_progress",
+                "data": {
+                    "repo_id": repo_id,
+                    "progress_pct": 100.0,
+                    "speed_mb": 0.0,
+                    "eta_seconds": 0,
+                    "status": "completed",
+                    "path": path
+                }
+            })
         except Exception as e:
-            self._download_tasks[task_id] = {
+            self._download_tasks[task_id].update({
                 "status": "error",
-                "repo_id": repo_id,
                 "error": str(e),
-            }
-            return {"status": "error", "error": str(e)}
+            })
+            await ws_manager.broadcast({
+                "type": "model_download_progress",
+                "data": {
+                    "repo_id": repo_id,
+                    "status": "error",
+                    "error": str(e)
+                }
+            })
 
     async def get_download_status(self, repo_id: str) -> dict:
         for task_id, info in self._download_tasks.items():
@@ -492,6 +598,299 @@ class ModelManager:
                 "fits_in_gpu": fits,
                 "tokens": _estimate_max_tokens(context_length, params_b or 0, vram_gb),
                 "gpu": gpu,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def get_model_config(self, repo_id: str) -> dict:
+        """Fetch full model config from HuggingFace with intelligent feature detection."""
+        try:
+            info = hf_api.model_info(repo_id, files_metadata=True)
+            config = info.config if hasattr(info, "config") and info.config else {}
+            tags = list(getattr(info, "tags", []))
+            model_name = repo_id.split("/")[-1]
+            library_name = info.library_name
+
+            fmt = _detect_format(tags, library_name)
+            quant = _detect_quantization(tags, model_name)
+            params_b = _estimate_params_billions(tags, model_name, config)
+
+            context_length = (
+                config.get("max_position_embeddings")
+                or config.get("n_positions")
+                or config.get("seq_length")
+                or 4096
+            )
+
+            # Check tags for context length hints (e.g., "32k", "128k", "16k")
+            tags_lower = " ".join(tags).lower()
+            if context_length == 4096:  # Only override if default
+                if "128k" in tags_lower or "131072" in tags_lower:
+                    context_length = 131072
+                elif "64k" in tags_lower or "65536" in tags_lower:
+                    context_length = 65536
+                elif "32k" in tags_lower or "32768" in tags_lower:
+                    context_length = 32768
+                elif "16k" in tags_lower or "16384" in tags_lower:
+                    context_length = 16384
+                elif "8k" in tags_lower or "8192" in tags_lower:
+                    context_length = 8192
+
+            architectures = config.get("architectures", []) if config else []
+            is_moe = any("moe" in a.lower() for a in architectures) if architectures else False
+
+            # Fallback: Qwen 3.x / 3.5 / 3.6 models typically support 32k+ context
+            if context_length == 4096:
+                name_lower = model_name.lower()
+                if any(kw in name_lower for kw in ["qwen3", "qwen-3", "qwen2.5", "qwen25", "qwen3.5", "qwen3.6", "qwopus"]):
+                    context_length = 32768  # Qwen 3.x default
+
+            # Detect multimodal
+            is_vision = any("vision" in a.lower() or "clip" in a.lower() or "conditional" in a.lower() for a in architectures)
+            is_multimodal = info.pipeline_tag == "image-text-to-text" or is_vision or any(
+                kw in " ".join(tags).lower() for kw in ["vision", "multimodal", "image-text", "vl", "visual"]
+            )
+
+            # Detect MTP (Multi-Token Prediction) / Speculative decoding support
+            has_mtp_head = False
+            mtp_layer_count = 0
+            arch_str = " ".join(architectures).lower() if architectures else ""
+            tags_lower = " ".join(tags).lower()
+            if "mtp" in model_name.lower() or "multi-token" in model_name.lower() or "speculative" in model_name.lower():
+                has_mtp_head = True
+            # Check tags for MTP
+            if "multi-token-prediction" in tags_lower or "multi_token_prediction" in tags_lower:
+                has_mtp_head = True
+            # Check config for MTP-related keys
+            if config.get("mtp") or config.get("multi_token_prediction") or config.get("speculative"):
+                has_mtp_head = True
+            # Some models have MTP head info in config
+            if "num_mtp_layers" in config:
+                mtp_layer_count = config.get("num_mtp_layers", 0)
+                has_mtp_head = mtp_layer_count > 0
+
+            # Detect tool calling capability from tags/architecture
+            supports_tool_calling = any(
+                kw in " ".join(tags).lower() for kw in ["tool", "function", "calling", "agent"]
+            ) or any("llama3" in a.lower() or "qwen" in a.lower() for a in architectures)
+
+            # Detect reasoning capability
+            supports_reasoning = any(
+                kw in " ".join(tags).lower() for kw in ["reasoning", "cot", "chain-of-thought"]
+            ) or "qwen3" in model_name.lower() or "deepseek-r1" in model_name.lower()
+
+            # Estimate VRAM
+            vram_gb = _estimate_vram_gb(params_b or 0, quant, context_length) if params_b else 0
+            gpu = self._get_gpu()
+            fits = gpu.get("total_gb", 0) > 0 and vram_gb > 0 and vram_gb <= gpu.get("total_gb", 0)
+
+            # Determine recommended settings
+            recommended = {
+                "tool_call_parser": "qwen3_coder" if "qwen3" in model_name.lower() else "qwen" if "qwen" in model_name.lower() else "",
+                "reasoning_parser": "qwen3" if "qwen3" in model_name.lower() else "deepseek-r1" if "deepseek-r1" in model_name.lower() else "",
+                "enable_multimodal": is_multimodal,
+                "context_length": context_length,
+                "speculative_algorithm": "EAGLE" if has_mtp_head else "",
+                "speculative_num_steps": 3 if has_mtp_head else None,
+                "load_format": "gguf" if fmt == "gguf" else "",
+                "dtype": "float16" if "awq" in quant.lower() else "auto",
+                "kv_cache_dtype": "fp8_e4m3" if params_b and params_b > 20 else "auto",
+                "cpu_offload_gb": 0 if fits else max(1, int(vram_gb - gpu.get("total_gb", 0)) + 2),
+            }
+
+            return {
+                "repo_id": repo_id,
+                "model_name": model_name,
+                "pipeline_tag": info.pipeline_tag,
+                "library_name": library_name,
+                "tags": tags,
+                "architectures": architectures,
+                "context_length": context_length,
+                "quantization_config": config.get("quantization_config", {}),
+                "num_parameters": config.get("num_parameters", {}),
+                "format": fmt,
+                "quantization": quant,
+                "params_billions": params_b,
+                "vram_estimate_gb": vram_gb,
+                "fits_in_gpu": fits,
+                "tokens": _estimate_max_tokens(context_length, params_b or 0, vram_gb),
+                "is_multimodal": is_multimodal,
+                "is_moe": is_moe,
+                "has_mtp_head": has_mtp_head,
+                "mtp_layer_count": mtp_layer_count,
+                "supports_tool_calling": supports_tool_calling,
+                "supports_reasoning": supports_reasoning,
+                "gpu": gpu,
+                "recommended": recommended,
+                "config": config,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def get_deployment_recommendations(self, repo_id: str) -> dict:
+        """Get intelligent deployment recommendations based on GPU VRAM and model requirements."""
+        try:
+            # Get model config
+            model_info = await self.get_model_config(repo_id)
+            if "error" in model_info:
+                return model_info
+
+            gpu = self._get_gpu()
+            gpu_total = gpu.get("total_gb", 0)
+            gpu_free = gpu.get("free_gb", 0)
+
+            params_b = model_info.get("params_billions", 0) or 0
+            quant = model_info.get("quantization", "fp16")
+            context_length = model_info.get("context_length", 4096)
+            is_moe = model_info.get("is_moe", False)
+            has_mtp_head = model_info.get("has_mtp_head", False)
+            is_multimodal = model_info.get("is_multimodal", False)
+
+            recommendations = {
+                "quantization": quant if quant else "awq" if params_b > 14 else "auto",
+                "dtype": "float16" if "awq" in quant.lower() else "auto",
+                "context_length": min(context_length, 32768) if gpu_total < 24 else context_length,
+                "tensor_parallel_size": 1,
+                "enable_multimodal": is_multimodal,
+                "trust_remote_code": True,
+                "kv_cache_dtype": "fp8_e4m3" if params_b > 20 else "auto",
+                "cpu_offload_gb": 0,
+                "mem_fraction_static": 0.85,
+                "max_running_requests": 2 if params_b > 20 else 4,
+                "speculative_algorithm": "EAGLE" if has_mtp_head else "",
+                "speculative_num_steps": 3 if has_mtp_head else None,
+                "speculative_draft_model_path": "",
+                "enable_dp_attention": False,
+            }
+
+            # Calculate VRAM needed
+            vram_gb = _estimate_vram_gb(params_b, quant, context_length)
+            vram_with_overhead = vram_gb + 1.5  # framework overhead
+
+            # Adjust for different scenarios
+            if vram_with_overhead > gpu_total * 0.95:
+                # Model won't fit - suggest aggressive quantization
+                if quant.lower() not in ("awq", "gptq", "int4", "int8", "fp8", "gguf"):
+                    recommendations["quantization"] = "awq"
+                    vram_gb = _estimate_vram_gb(params_b, "awq", context_length)
+                    vram_with_overhead = vram_gb + 1.5
+
+            if vram_with_overhead > gpu_total * 0.95:
+                # Still too big - suggest CPU offloading
+                recommendations["cpu_offload_gb"] = min(int(vram_with_overhead - gpu_total * 0.85 + 2), 16)
+                recommendations["mem_fraction_static"] = 0.80
+
+            if vram_with_overhead > gpu_total * 0.95:
+                # Still too big - suggest tensor parallelism (if multi-GPU)
+                if gpu.get("count", 1) > 1:
+                    recommendations["tensor_parallel_size"] = gpu.get("count", 1)
+                else:
+                    recommendations["max_running_requests"] = 1
+                    recommendations["mem_fraction_static"] = 0.75
+
+            # For MoE models on single GPU
+            if is_moe and gpu.get("count", 1) == 1:
+                recommendations["enable_dp_attention"] = False  # Can't use DP attention on single GPU
+
+            # For very large models (>20B)
+            if params_b > 20:
+                recommendations["chunked_prefill_size"] = 2048
+                recommendations["cuda_graph_max_bs"] = 256
+                recommendations["max_prefill_tokens"] = min(context_length, 4096)
+
+            # Add warnings
+            warnings = []
+            if vram_with_overhead > gpu_total:
+                warnings.append(f"Model VRAM estimate ({vram_with_overhead:.1f}GB) exceeds GPU ({gpu_total}GB) - CPU offloading required")
+            if params_b > 20 and gpu_total < 24:
+                warnings.append("Large model on limited VRAM - expect slower inference")
+            if is_moe and quant.lower() not in ("awq", "gptq", "fp8", "int4"):
+                warnings.append("MoE model without quantization - high VRAM usage")
+
+            return {
+                "repo_id": repo_id,
+                "model_name": model_info.get("model_name", repo_id.split("/")[-1]),
+                "gpu": gpu,
+                "model_info": {
+                    "params_billions": params_b,
+                    "quantization": quant,
+                    "context_length": context_length,
+                    "is_moe": is_moe,
+                    "has_mtp_head": has_mtp_head,
+                    "is_multimodal": is_multimodal,
+                    "vram_estimate_gb": round(vram_with_overhead, 1),
+                },
+                "recommendations": recommendations,
+                "warnings": warnings,
+                "fits_without_offloading": vram_with_overhead <= gpu_total * 0.9,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def vram_advisor(self, repo_id: str, context_length: Optional[int] = None) -> dict:
+        """Analyze VRAM requirements for a model across precisions and advise on GPU deployment."""
+        try:
+            model_info = await self.get_model_config(repo_id)
+            if "error" in model_info:
+                return model_info
+
+            gpu = self._get_gpu()
+            gpu_total = gpu.get("total_gb", 0)
+
+            params_b = model_info.get("params_billions", 0) or 0
+            if not params_b:
+                # Fallback to estimate from repo_id
+                params_b = _estimate_params_billions([], repo_id.split("/")[-1]) or 7.0
+
+            ctx_len = context_length or model_info.get("context_length", 4096)
+
+            precisions = ["fp16", "fp8", "int4"]
+            options = {}
+            best_fit = None
+
+            for prec in precisions:
+                est = _estimate_vram_gb(params_b, prec, ctx_len)
+                fits = gpu_total > 0 and est <= gpu_total
+                offload = max(0.0, round(est - gpu_total, 1))
+                options[prec] = {
+                    "vram_estimate_gb": est,
+                    "fits_in_gpu": fits,
+                    "required_cpu_offload_gb": offload
+                }
+                if fits and (best_fit is None or precisions.index(prec) < precisions.index(best_fit)):
+                    best_fit = prec
+
+            optimal_quant = best_fit or "int4"
+            optimal_vram = options[optimal_quant]["vram_estimate_gb"]
+            optimal_offload = options[optimal_quant]["required_cpu_offload_gb"]
+
+            if best_fit:
+                recommendation = (
+                    f"Based on your GPU ({gpu.get('name', 'GPU')} with {gpu_total}GB VRAM), "
+                    f"we recommend deploying this model in **{best_fit}** format. "
+                    f"It will fit comfortably with an estimated VRAM usage of {optimal_vram}GB."
+                )
+            else:
+                recommendation = (
+                    f"Based on your GPU ({gpu.get('name', 'GPU')} with {gpu_total}GB VRAM), "
+                    f"this model is too large to fit in GPU memory. We recommend using **int4** (or AWQ) format "
+                    f"with {optimal_offload}GB CPU offloading."
+                )
+
+            return {
+                "repo_id": repo_id,
+                "gpu": gpu,
+                "params_billions": round(params_b, 1),
+                "context_length": ctx_len,
+                "options": options,
+                "optimal_quantization": optimal_quant,
+                "recommendation": recommendation,
+                "optimal_settings": {
+                    "quantization": "awq" if optimal_quant == "int4" else "fp8" if optimal_quant == "fp8" else "",
+                    "dtype": "float16" if optimal_quant == "int4" else "auto",
+                    "cpu_offload_gb": int(optimal_offload),
+                    "kv_cache_dtype": "fp8_e4m3" if optimal_quant == "fp16" and params_b > 20 else "auto"
+                }
             }
         except Exception as e:
             return {"error": str(e)}
@@ -846,7 +1245,7 @@ class ModelManager:
             "models": models,
             "total": len(models),
             "gpu": gpu,
-            "scanned_dirs": [d for d in _COMMON_MODEL_DIRS + extra_dirs if os.path.isdir(d)],
+            "scanned_dirs": _get_model_scan_dirs() + [d for d in extra_dirs if os.path.isdir(d)],
         }
 
     async def locate_model(self, repo_id: str) -> dict:
@@ -947,42 +1346,36 @@ class ModelManager:
         """Delete a model from HF cache or extra directories."""
         freed_bytes = 0
         deleted_path = ""
+        import shutil
 
-        # Try HF cache first
-        try:
-            cache_info = scan_cache_dir()
-            for repo in cache_info.repos:
-                if repo.repo_id == repo_id:
-                    freed_bytes = repo.size_on_disk
-                    # Get path before deleting
-                    if repo.revisions:
-                        rev = repo.revisions[0]
-                        if hasattr(rev, 'snapshot_path'):
-                            deleted_path = str(rev.snapshot_path)
-                        elif rev.commit_hash:
-                            deleted_path = os.path.join(
-                                os.path.expanduser("~"), ".cache", "huggingface", "hub",
-                                f"models--{repo_id.replace('/', '--')}",
-                            )
+        # Try HF cache first – manually delete the directory
+        cache_base = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+        cache_dir = os.path.join(cache_base, f"models--{repo_id.replace('/', '--')}")
 
-                    cache_info.delete_repos([repo_id])
-                    return {
-                        "repo_id": repo_id,
-                        "deleted_path": deleted_path,
-                        "freed_bytes": freed_bytes,
-                        "freed_gb": round(freed_bytes / 1e9, 2),
-                    }
-        except Exception:
-            pass
+        if os.path.isdir(cache_dir):
+            for root, dirs, fnames in os.walk(cache_dir):
+                for f in fnames:
+                    try:
+                        fp = os.path.join(root, f)
+                        if os.path.isfile(fp) and not os.path.islink(fp):
+                            freed_bytes += os.path.getsize(fp)
+                    except OSError:
+                        pass
+            deleted_path = cache_dir
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return {
+                "repo_id": repo_id,
+                "deleted_path": deleted_path,
+                "freed_bytes": freed_bytes,
+                "freed_gb": round(freed_bytes / 1e9, 2),
+            }
 
         # Try extra directories
-        import shutil
         extra_dirs = ["/home/caio/models", "/data/models", "/mnt/models", os.path.expanduser("~/models")]
         model_name = repo_id.split("/")[-1] if "/" in repo_id else repo_id
         for base_dir in extra_dirs:
             full_path = os.path.join(base_dir, model_name)
             if os.path.isdir(full_path):
-                # Calculate size before deleting
                 for root, dirs, fnames in os.walk(full_path):
                     for f in fnames:
                         try:
@@ -990,7 +1383,7 @@ class ModelManager:
                         except OSError:
                             pass
                 deleted_path = full_path
-                shutil.rmtree(full_path)
+                shutil.rmtree(full_path, ignore_errors=True)
                 return {
                     "repo_id": repo_id,
                     "deleted_path": deleted_path,
@@ -1000,12 +1393,13 @@ class ModelManager:
 
         return {"error": f"Model {repo_id} not found locally"}
 
-    async def validate_model_config(self, model_path: str, quantization: str = "", dtype: str = "auto") -> dict:
+    async def validate_model_config(self, model_path: str, quantization: str = "", dtype: str = "auto", extra: dict | None = None) -> dict:
         """Validate a model configuration before starting. Returns warnings/errors."""
         warnings = []
         errors = []
         suggestions = []
         config_data = None
+        extra = extra or {}
 
         # Try to find and read config.json
         config_path = None
@@ -1103,6 +1497,50 @@ class ModelManager:
                     f"Estimated VRAM ({vram_gb}GB) exceeds GPU ({gpu_total}GB). "
                     f"Use quantization or a smaller model."
                 )
+
+            # Check 8: flag compatibility
+            spec_algo = extra.get("speculative_algorithm")
+            if spec_algo:
+                model_arch = " ".join(architectures).lower() if architectures else ""
+                if any(x in model_arch for x in ["mamba", "qwen3"]):
+                    warnings.append(
+                        f"Speculative decoding ({spec_algo}) with {architectures} needs "
+                        f"--mamba-scheduler-strategy extra_buffer and SGLANG_ENABLE_SPEC_V2=1"
+                    )
+                    suggestions.append("SGLANG_ENABLE_SPEC_V2=1 and --mamba-scheduler-strategy extra_buffer will be auto-applied")
+
+            dp_attention = extra.get("enable_dp_attention")
+            ep_size = extra.get("ep_size", 0) or 0
+            if dp_attention and is_moe and ep_size <= 1:
+                warnings.append("--enable-dp-attention requires --ep-size > 1 for MoE models")
+
+            tp = extra.get("tensor_parallel_size", 1) or 1
+            pp = extra.get("pp_size", 1) or 1
+            gpu_count = gpu.get("count", 1)
+            if tp > gpu_count:
+                errors.append(f"Tensor parallelism ({tp}) exceeds GPU count ({gpu_count})")
+            if pp > gpu_count:
+                errors.append(f"Pipeline parallelism ({pp}) exceeds GPU count ({gpu_count})")
+            if tp * pp > gpu_count:
+                errors.append(f"TP×PP ({tp}×{pp}={tp*pp}) exceeds GPU count ({gpu_count})")
+
+            cpu_offload = extra.get("cpu_offload_gb", 0) or 0
+            if cpu_offload > 0 and params_b > 0:
+                model_est = params_b * 2  # fp16 rough
+                max_useful = min(model_est, gpu_total * 0.9)
+                if cpu_offload > max_useful:
+                    warnings.append(
+                        f"CPU offload ({cpu_offload}GB) exceeds useful amount (~{max_useful:.0f}GB)"
+                    )
+
+            mem_frac = extra.get("mem_fraction_static")
+            if mem_frac is not None and mem_frac > 0.95:
+                warnings.append(f"mem_fraction_static ({mem_frac}) leaves no headroom — risk of OOM")
+            elif mem_frac is not None and mem_frac < 0.5:
+                suggestions.append(f"Increase mem_fraction_static from {mem_frac} to 0.75-0.88 for better throughput")
+
+            if quantization and "awq" in quantization.lower():
+                suggestions.append("Use --quantization awq_marlin for ~2x faster inference than awq")
 
             return {
                 "valid": len(errors) == 0,

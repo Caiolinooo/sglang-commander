@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.models import DeployModelRequest
+from app.schemas.models import DeployModelRequest, DownloadModelRequest
 from app.services.model_manager import model_manager
 from app.services.server_manager import server_manager
 
@@ -60,11 +60,10 @@ async def validate_hf_token(current_user: User = Depends(get_current_user)):
 
 @router.post("/download")
 async def download_model(
-    repo_id: str,
-    revision: str = "main",
+    req: DownloadModelRequest,
     current_user: User = Depends(get_current_user),
 ):
-    return await model_manager.download_model(repo_id, revision)
+    return await model_manager.download_model(req.repo_id, req.revision)
 
 
 @router.get("/download-status/{repo_id}")
@@ -127,8 +126,22 @@ async def deploy_model(
         config["enable_multimodal"] = req.enable_multimodal
     if req.load_format:
         config["load_format"] = req.load_format
+    if req.speculative_algorithm:
+        config["speculative_algorithm"] = req.speculative_algorithm
+    if req.speculative_num_steps is not None:
+        config["speculative_num_steps"] = req.speculative_num_steps
+    if req.speculative_draft_model_path:
+        config["speculative_draft_model_path"] = req.speculative_draft_model_path
+    if req.kv_cache_dtype:
+        config["kv_cache_dtype"] = req.kv_cache_dtype
+    if req.cpu_offload_gb is not None:
+        config["cpu_offload_gb"] = req.cpu_offload_gb
+    if req.mem_fraction_static is not None:
+        config["mem_fraction_static"] = req.mem_fraction_static
+    if req.max_running_requests is not None:
+        config["max_running_requests"] = req.max_running_requests
 
-    result = await server_manager.start_server(config)
+    result = await server_manager.start(config)
     return result
 
 
@@ -145,6 +158,25 @@ async def model_info_endpoint(repo_id: str):
 @router.get("/variants/{repo_id:path}")
 async def get_quant_variants(repo_id: str, current_user: User = Depends(get_current_user)):
     return await model_manager.get_quant_variants(repo_id)
+
+
+@router.get("/config/{repo_id:path}")
+async def get_model_config(repo_id: str, current_user: User = Depends(get_current_user)):
+    return await model_manager.get_model_config(repo_id)
+
+
+@router.get("/recommendations/{repo_id:path}")
+async def get_deployment_recommendations(repo_id: str, current_user: User = Depends(get_current_user)):
+    return await model_manager.get_deployment_recommendations(repo_id)
+
+
+@router.get("/advisor/{repo_id:path}")
+async def get_vram_advisor(
+    repo_id: str,
+    context_length: int = Query(default=None),
+    current_user: User = Depends(get_current_user),
+):
+    return await model_manager.vram_advisor(repo_id, context_length)
 
 
 @router.get("/gpu-processes")
