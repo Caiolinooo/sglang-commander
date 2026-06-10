@@ -5,7 +5,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Switch } from '../ui/Switch'
 import { toast } from '../ui/Toast'
-import { getDeploymentRecommendations, getQuantVariants, getModelConfig, deployModel } from '../../api/endpoints'
+import { getDeploymentRecommendations, getQuantVariants, getModelConfig, deployModel, getVramEstimate } from '../../api/endpoints'
 import { Cpu, RotateCw, Play } from 'lucide-react'
 import { cn } from '../ui/cn'
 import type { HFModel } from '../../types'
@@ -35,8 +35,43 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
   const [speculativeNumSteps, setSpeculativeNumSteps] = useState(3)
   const [speculativeDraftModelPath, setSpeculativeDraftModelPath] = useState('')
   
+  // New States
+  const [cpuOffloadGb, setCpuOffloadGb] = useState(0)
+  const [memFractionStatic, setMemFractionStatic] = useState(0.88)
+  const [estimatedVram, setEstimatedVram] = useState<number | null>(null)
+  
   const [deploying, setDeploying] = useState(false)
   const [quantVariants, setQuantVariants] = useState<any[]>([])
+
+  // Real-time VRAM Estimation
+  useEffect(() => {
+    if (!model) {
+      setEstimatedVram(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const resp = await getVramEstimate({
+          params_billions: model.params_billions || 0,
+          quantization: quantization || '',
+          context_length: contextLength || 4096,
+          dtype,
+          cpu_offload_gb: cpuOffloadGb || 0,
+          tensor_parallel_size: tensorParallelSize || 1,
+          mem_fraction_static: memFractionStatic || 0.88,
+        })
+        if (resp.data && resp.data.total !== undefined) {
+          setEstimatedVram(resp.data.total)
+        }
+      } catch {
+        // Fallback to static model metadata estimate if backend check fails
+        setEstimatedVram(model.vram_estimate_gb || null)
+      }
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [model, quantization, contextLength, dtype, cpuOffloadGb, tensorParallelSize, memFractionStatic])
 
   // Auto-detect defaults on select
   useEffect(() => {
@@ -53,6 +88,9 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
     setTrustRemoteCode(true)
     setSpeculativeAlgorithm('')
     setSpeculativeDraftModelPath('')
+    setCpuOffloadGb(0)
+    setMemFractionStatic(0.88)
+    setEstimatedVram(model.vram_estimate_gb || null)
     
     // Autodetect parsers
     if (name.includes('llama-3') || name.includes('llama3')) {
@@ -110,6 +148,8 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
         if (rec.enable_multimodal !== undefined) setEnableMultimodal(rec.enable_multimodal)
         if (rec.speculative_algorithm) setSpeculativeAlgorithm(rec.speculative_algorithm)
         if (rec.speculative_num_steps) setSpeculativeNumSteps(rec.speculative_num_steps)
+        if (rec.cpu_offload_gb) setCpuOffloadGb(rec.cpu_offload_gb)
+        if (rec.mem_fraction_static) setMemFractionStatic(rec.mem_fraction_static)
         toast.success("Applied smart configuration recommendations.")
       } else {
         toast.warning("No custom recommendations found. Defaults retained.")
@@ -138,6 +178,8 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
         speculative_algorithm: speculativeAlgorithm || undefined,
         speculative_num_steps: speculativeAlgorithm ? speculativeNumSteps : undefined,
         speculative_draft_model_path: speculativeDraftModelPath || undefined,
+        cpu_offload_gb: cpuOffloadGb || undefined,
+        mem_fraction_static: memFractionStatic || undefined,
       })
       toast.success("Server started with the model successfully!")
       fetchStatus()
@@ -166,7 +208,12 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
             </div>
             <div>
               <span className="text-text-muted">Estimated VRAM:</span>{' '}
-              <strong className="text-text">{model.vram_estimate_gb ? `${model.vram_estimate_gb} GB` : 'N/A'}</strong>
+              <strong className={cn(
+                "transition-colors duration-300",
+                estimatedVram && gpuInfo && estimatedVram > gpuInfo.free_gb ? "text-error" : "text-text"
+              )}>
+                {estimatedVram !== null ? `${estimatedVram.toFixed(1)} GB` : (model.vram_estimate_gb ? `${model.vram_estimate_gb} GB` : 'N/A')}
+              </strong>
             </div>
             {gpuInfo && (
               <div className="col-span-2 text-[10px] text-text-muted mt-1">
@@ -181,7 +228,14 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
             <Button variant="outline" size="sm" onClick={handleApplySmart} className="flex-1 gap-1 text-xs">
               <Cpu size={12} /> Get Smart Config
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuantization('')} className="flex-1 gap-1 text-xs">
+            <Button variant="outline" size="sm" onClick={() => {
+              setQuantization('');
+              setDtype('auto');
+              setContextLength(0);
+              setTensorParallelSize(1);
+              setCpuOffloadGb(0);
+              setMemFractionStatic(0.88);
+            }} className="flex-1 gap-1 text-xs">
               <RotateCw size={12} /> Reset Config
             </Button>
           </div>
@@ -251,6 +305,31 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
                 type="number" 
                 value={port} 
                 onChange={e => setPort(Number(e.target.value))} 
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">CPU Offload (GB)</label>
+              <Input 
+                type="number" 
+                value={cpuOffloadGb || ''} 
+                onChange={e => setCpuOffloadGb(Number(e.target.value))} 
+                placeholder="0"
+                min={0}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Static Mem Fraction</label>
+              <Input 
+                type="number" 
+                value={memFractionStatic || ''} 
+                onChange={e => setMemFractionStatic(Number(e.target.value))} 
+                placeholder="0.88"
+                step="0.01"
+                min={0.3} max={0.99}
                 className="h-8 text-xs"
               />
             </div>

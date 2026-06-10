@@ -29,6 +29,19 @@ export const getServerLogs = (cursor: number = 0) =>
   apiClient.get(`/server/logs?cursor=${cursor}`)
 export const healthCheck = () => apiClient.get('/server/health')
 export const getModelInfo = () => apiClient.get('/server/model-info')
+export const getVramEstimate = (config: Record<string, unknown>) =>
+  apiClient.post<{
+    gpu: GPUInfo;
+    weights: number;
+    weights_raw: number;
+    cpu_offloaded: number;
+    kv_cache: number;
+    activations: number;
+    overhead: number;
+    total: number;
+    fits: boolean;
+    warnings: string[];
+  }>('/server/vram-estimate', config)
 export const validateModel = (config: Record<string, unknown>) =>
   apiClient.post<{ valid: boolean; warnings: string[]; errors: string[]; suggestions: string[]; model_info: any }>('/server/validate', config)
 

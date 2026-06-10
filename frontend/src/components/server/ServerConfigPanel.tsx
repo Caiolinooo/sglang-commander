@@ -21,19 +21,33 @@ const DTYPE_OPTIONS = [
   { value: 'float32', label: 'fp32', desc: 'Full 32-bit precision. Only needed for debugging.' },
 ]
 
+const POPULAR_SUGGESTIONS = [
+  'meta-llama/Llama-3.2-1B-Instruct',
+  'meta-llama/Llama-3.2-3B-Instruct',
+  'meta-llama/Llama-3-8B-Instruct',
+  'Qwen/Qwen2.5-Coder-7B-Instruct',
+  'Qwen/Qwen2.5-7B-Instruct',
+  'deepseek-ai/DeepSeek-R1-Distill-Qwen-8B',
+  'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
+  'deepseek-ai/DeepSeek-R1-Distill-Llama-8B',
+  'mconcat/Qwopus3.6-27B-v2-AWQ-4bit',
+]
+
 export default function ServerConfigPanel() {
   const {
     config,
     advanced,
     status,
     loading,
+    localModels,
     setConfig,
     setAdvanced,
     showAdvanced,
     setShowAdvanced,
     startServer,
     stopServer,
-    restartServer
+    restartServer,
+    selectLocalModel
   } = useServerStore()
 
   const handleStart = async () => {
@@ -108,11 +122,33 @@ export default function ServerConfigPanel() {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-text-muted">Model Path (HuggingFace repo or local path)</label>
               <Input 
+                list="local-models-list"
                 value={config.model_path} 
-                onChange={e => update('model_path', e.target.value)} 
+                onChange={e => {
+                  const val = e.target.value;
+                  update('model_path', val);
+                  const matched = localModels.find(m => m.repo_id === val);
+                  if (matched) {
+                    selectLocalModel(matched);
+                  }
+                }} 
                 placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct" 
                 className="h-9 font-mono text-xs"
               />
+              <datalist id="local-models-list">
+                {/* Local models first */}
+                {localModels.map(m => (
+                  <option key={m.repo_id} value={m.repo_id}>
+                    Downloaded Local Model ({m.params_billions ? m.params_billions + 'B' : 'Local'})
+                  </option>
+                ))}
+                {/* Popular HuggingFace suggestions */}
+                {POPULAR_SUGGESTIONS.filter(repoId => !localModels.some(m => m.repo_id === repoId)).map(repoId => (
+                  <option key={repoId} value={repoId}>
+                    Popular HuggingFace Repo
+                  </option>
+                ))}
+              </datalist>
             </div>
           </div>
           
