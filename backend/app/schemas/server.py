@@ -42,6 +42,7 @@ class ServerStartRequest(BaseModel):
     speculative_algorithm: Optional[str] = Field(default=None, description="EAGLE, NGRAM, NEXTN, STANDALONE")
     speculative_num_steps: Optional[int] = Field(default=None, ge=1, le=10)
     speculative_draft_model_path: Optional[str] = Field(default=None)
+    speculative_eagle_topk: Optional[int] = Field(default=None, ge=1, le=8, description="EAGLE top-k speculative tokens")
 
     # Pipeline parallelism
     pp_size: Optional[int] = Field(default=None, ge=1, description="Pipeline parallelism size")

@@ -66,6 +66,9 @@ class SglangBackend(BackendProvider):
         """Build the subprocess environment, replacing hardcoded paths."""
         env = os.environ.copy()
 
+        # Disable stdout buffering so logs stream in real-time
+        env["PYTHONUNBUFFERED"] = "1"
+
         # PATH: prepend venv bin + optional CUDA bin
         venv_bin = getattr(settings, "venv_path", None)
         if venv_bin is None and hasattr(sys, "prefix"):
@@ -86,6 +89,28 @@ class SglangBackend(BackendProvider):
 
         if cuda_home:
             env["CUDA_HOME"] = cuda_home
+
+        # Add pip-installed nvidia package library paths to LD_LIBRARY_PATH
+        ld_paths = []
+        if hasattr(sys, "prefix"):
+            lib_dir = os.path.join(sys.prefix, "lib")
+            if os.path.isdir(lib_dir):
+                for py_dir in os.listdir(lib_dir):
+                    if py_dir.startswith("python"):
+                        sp_dir = os.path.join(lib_dir, py_dir, "site-packages")
+                        if os.path.isdir(sp_dir):
+                            nvidia_dir = os.path.join(sp_dir, "nvidia")
+                            if os.path.isdir(nvidia_dir):
+                                for pkg in os.listdir(nvidia_dir):
+                                    pkg_lib = os.path.join(nvidia_dir, pkg, "lib")
+                                    if os.path.isdir(pkg_lib):
+                                        ld_paths.append(pkg_lib)
+
+        current_ld = env.get("LD_LIBRARY_PATH", "")
+        if current_ld:
+            ld_paths.append(current_ld)
+        if ld_paths:
+            env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -200,12 +225,28 @@ class SglangBackend(BackendProvider):
             cmd.extend(["--moe-runner-backend", config["moe_runner_backend"]])
 
         # Speculative decoding / MTP
-        if config.get("speculative_algorithm"):
-            cmd.extend(["--speculative-algorithm", config["speculative_algorithm"]])
+        spec_algo = config.get("speculative_algorithm")
+        if spec_algo:
+            cmd.extend(["--speculative-algorithm", spec_algo])
             if config.get("speculative_num_steps") is not None:
                 cmd.extend(["--speculative-num-steps", str(config["speculative_num_steps"])])
             if config.get("speculative_draft_model_path"):
                 cmd.extend(["--speculative-draft-model-path", config["speculative_draft_model_path"]])
+            
+            # speculative_eagle_topk handling
+            eagle_topk = config.get("speculative_eagle_topk")
+            if eagle_topk is not None:
+                cmd.extend(["--speculative-eagle-topk", str(eagle_topk)])
+            elif spec_algo.upper() == "EAGLE":
+                # EAGLE validation bug bypass: default to 1 if not defined elsewhere
+                has_eagle_topk = (
+                    "speculative_eagle_topk" in config.get("extra_args", {})
+                    or (config.get("custom_args") and "--speculative-eagle-topk" in config["custom_args"])
+                )
+                if not has_eagle_topk:
+                    cmd.extend(["--speculative-eagle-topk", "1"])
+                    self._log_lines.append("[FIX] Auto-injected --speculative-eagle-topk 1 for EAGLE algorithm")
+            
             cmd.extend(["--mamba-scheduler-strategy", "extra_buffer"])
 
         # Pipeline parallelism
