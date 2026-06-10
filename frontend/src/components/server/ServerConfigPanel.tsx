@@ -1,10 +1,11 @@
+import { useState } from 'react'
 import { useServerStore } from '../../stores'
 import { Switch } from '../ui/Switch'
 import { Slider } from '../ui/Slider'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
-import { HardDrive, Play, Square, RotateCw } from 'lucide-react'
+import { HardDrive, Play, Square, RotateCw, ChevronDown } from 'lucide-react'
 
 const QUANT_OPTIONS = [
   { value: '', label: 'None', desc: 'Full precision (fp16/bf16)' },
@@ -21,17 +22,19 @@ const DTYPE_OPTIONS = [
   { value: 'float32', label: 'fp32', desc: 'Full 32-bit precision. Only needed for debugging.' },
 ]
 
-const POPULAR_SUGGESTIONS = [
-  'meta-llama/Llama-3.2-1B-Instruct',
-  'meta-llama/Llama-3.2-3B-Instruct',
-  'meta-llama/Llama-3-8B-Instruct',
-  'Qwen/Qwen2.5-Coder-7B-Instruct',
-  'Qwen/Qwen2.5-7B-Instruct',
-  'deepseek-ai/DeepSeek-R1-Distill-Qwen-8B',
-  'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
-  'deepseek-ai/DeepSeek-R1-Distill-Llama-8B',
-  'mconcat/Qwopus3.6-27B-v2-AWQ-4bit',
-]
+const SUGGESTION_DETAILS: Record<string, { params_billions: number, quantization: string, context_length: number, is_multimodal: boolean }> = {
+  'meta-llama/Llama-3.2-1B-Instruct': { params_billions: 1, quantization: '', context_length: 131072, is_multimodal: false },
+  'meta-llama/Llama-3.2-3B-Instruct': { params_billions: 3, quantization: '', context_length: 131072, is_multimodal: false },
+  'meta-llama/Llama-3-8B-Instruct': { params_billions: 8, quantization: '', context_length: 8192, is_multimodal: false },
+  'Qwen/Qwen2.5-Coder-7B-Instruct': { params_billions: 7, quantization: '', context_length: 32768, is_multimodal: false },
+  'Qwen/Qwen2.5-7B-Instruct': { params_billions: 7, quantization: '', context_length: 32768, is_multimodal: false },
+  'deepseek-ai/DeepSeek-R1-Distill-Qwen-8B': { params_billions: 8, quantization: '', context_length: 16384, is_multimodal: false },
+  'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B': { params_billions: 14, quantization: '', context_length: 16384, is_multimodal: false },
+  'deepseek-ai/DeepSeek-R1-Distill-Llama-8B': { params_billions: 8, quantization: '', context_length: 16384, is_multimodal: false },
+  'mconcat/Qwopus3.6-27B-v2-AWQ-4bit': { params_billions: 27, quantization: 'awq', context_length: 32768, is_multimodal: false },
+}
+
+const POPULAR_SUGGESTIONS = Object.keys(SUGGESTION_DETAILS)
 
 export default function ServerConfigPanel() {
   const {
@@ -49,6 +52,18 @@ export default function ServerConfigPanel() {
     restartServer,
     selectLocalModel
   } = useServerStore()
+
+  const [isOpen, setIsOpen] = useState(false)
+
+  const filteredLocal = localModels.filter(m => 
+    m.repo_id.toLowerCase().includes(config.model_path.toLowerCase()) ||
+    m.model_name.toLowerCase().includes(config.model_path.toLowerCase())
+  )
+
+  const filteredPopular = POPULAR_SUGGESTIONS.filter(repoId => 
+    repoId.toLowerCase().includes(config.model_path.toLowerCase()) &&
+    !localModels.some(m => m.repo_id === repoId)
+  )
 
   const handleStart = async () => {
     try {
@@ -119,36 +134,97 @@ export default function ServerConfigPanel() {
               value={config.backend_type}
               onChange={v => update('backend_type', v)}
             />
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="text-xs font-semibold text-text-muted">Model Path (HuggingFace repo or local path)</label>
-              <Input 
-                list="local-models-list"
-                value={config.model_path} 
-                onChange={e => {
-                  const val = e.target.value;
-                  update('model_path', val);
-                  const matched = localModels.find(m => m.repo_id === val);
-                  if (matched) {
-                    selectLocalModel(matched);
-                  }
-                }} 
-                placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct" 
-                className="h-9 font-mono text-xs"
-              />
-              <datalist id="local-models-list">
-                {/* Local models first */}
-                {localModels.map(m => (
-                  <option key={m.repo_id} value={m.repo_id}>
-                    Downloaded Local Model ({m.params_billions ? m.params_billions + 'B' : 'Local'})
-                  </option>
-                ))}
-                {/* Popular HuggingFace suggestions */}
-                {POPULAR_SUGGESTIONS.filter(repoId => !localModels.some(m => m.repo_id === repoId)).map(repoId => (
-                  <option key={repoId} value={repoId}>
-                    Popular HuggingFace Repo
-                  </option>
-                ))}
-              </datalist>
+              <div className="relative">
+                <Input 
+                  value={config.model_path} 
+                  onFocus={() => setIsOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => setIsOpen(false), 200);
+                  }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    update('model_path', val);
+                    const matched = localModels.find(m => m.repo_id === val);
+                    if (matched) {
+                      selectLocalModel(matched);
+                    }
+                  }} 
+                  placeholder="e.g. meta-llama/Llama-3.2-3B-Instruct" 
+                  className="h-9 font-mono text-xs pr-8"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(prev => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text cursor-pointer transition-colors"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+
+              {isOpen && (filteredLocal.length > 0 || filteredPopular.length > 0) && (
+                <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-surface border border-border rounded-lg shadow-lg z-50 divide-y divide-border animate-in fade-in slide-in-from-top-1 duration-200">
+                  {filteredLocal.length > 0 && (
+                    <div className="py-1">
+                      <div className="px-3 py-1.5 text-[10px] font-bold text-text-muted bg-surface-2/40 uppercase tracking-wider">
+                        Local Cache (Downloaded)
+                      </div>
+                      {filteredLocal.map(m => (
+                        <div 
+                          key={m.repo_id}
+                          className="px-3 py-2 text-xs text-text hover:bg-surface-2 cursor-pointer flex justify-between items-center transition-colors font-mono"
+                          onClick={() => {
+                            selectLocalModel(m);
+                            setIsOpen(false);
+                          }}
+                        >
+                          <span className="truncate mr-2">{m.repo_id}</span>
+                          <span className="text-[9px] bg-success/20 text-success px-1.5 py-0.5 rounded font-semibold shrink-0 font-sans">
+                            LOCAL ({m.params_billions ? `${m.params_billions}B` : m.size_gb ? `${m.size_gb}GB` : 'cache'})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {filteredPopular.length > 0 && (
+                    <div className="py-1">
+                      <div className="px-3 py-1.5 text-[10px] font-bold text-text-muted bg-surface-2/40 uppercase tracking-wider">
+                        Popular on Hugging Face
+                      </div>
+                      {filteredPopular.map(repoId => {
+                        const details = SUGGESTION_DETAILS[repoId];
+                        return (
+                          <div 
+                            key={repoId}
+                            className="px-3 py-2 text-xs text-text hover:bg-surface-2 cursor-pointer flex justify-between items-center transition-colors font-mono"
+                            onClick={() => {
+                              if (details) {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  model_path: repoId,
+                                  quantization: details.quantization,
+                                  context_length: details.context_length,
+                                  enable_multimodal: details.is_multimodal,
+                                  dtype: details.quantization === 'awq' ? 'float16' : 'auto'
+                                }));
+                              } else {
+                                update('model_path', repoId);
+                              }
+                              setIsOpen(false);
+                            }}
+                          >
+                            <span className="truncate mr-2">{repoId}</span>
+                            <span className="text-[9px] bg-primary/25 text-primary px-1.5 py-0.5 rounded font-semibold shrink-0 font-sans">
+                              HF HUB ({details?.params_billions ? `${details.params_billions}B` : 'hub'})
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           

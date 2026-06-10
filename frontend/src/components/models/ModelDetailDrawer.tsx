@@ -60,6 +60,10 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
           cpu_offload_gb: cpuOffloadGb || 0,
           tensor_parallel_size: tensorParallelSize || 1,
           mem_fraction_static: memFractionStatic || 0.88,
+          enable_multimodal: enableMultimodal,
+          speculative_algorithm: speculativeAlgorithm,
+          speculative_num_steps: speculativeNumSteps,
+          speculative_draft_model_path: speculativeDraftModelPath,
         })
         if (resp.data && resp.data.total !== undefined) {
           setEstimatedVram(resp.data.total)
@@ -71,7 +75,19 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
     }, 250)
 
     return () => clearTimeout(timer)
-  }, [model, quantization, contextLength, dtype, cpuOffloadGb, tensorParallelSize, memFractionStatic])
+  }, [
+    model,
+    quantization,
+    contextLength,
+    dtype,
+    cpuOffloadGb,
+    tensorParallelSize,
+    memFractionStatic,
+    enableMultimodal,
+    speculativeAlgorithm,
+    speculativeNumSteps,
+    speculativeDraftModelPath
+  ])
 
   // Auto-detect defaults on select
   useEffect(() => {
@@ -399,6 +415,17 @@ export default function ModelDetailDrawer({ model, open, onClose }: ModelDetailD
                 />
               </div>
             </div>
+            {speculativeAlgorithm && (
+              <div className="space-y-1 mt-1.5">
+                <label className="text-[10px] text-text-muted">Draft Model Path (HuggingFace repo or local path)</label>
+                <Input 
+                  value={speculativeDraftModelPath} 
+                  onChange={e => setSpeculativeDraftModelPath(e.target.value)} 
+                  placeholder="e.g. meta-llama/Llama-3.2-1B-Instruct"
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
           </div>
         </div>
 

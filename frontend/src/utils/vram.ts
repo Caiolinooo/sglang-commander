@@ -14,6 +14,9 @@ export interface VRAMInput {
   numLayers?: number
   numKvHeads?: number
   headDim?: number
+  enableMultimodal?: boolean
+  speculativeAlgorithm?: string
+  speculativeDraftModelPath?: string
 }
 
 export interface VRAMBreakdown {
@@ -21,6 +24,8 @@ export interface VRAMBreakdown {
   kvCache: number
   activations: number
   frameworkOverhead: number
+  visionTower: number
+  speculative: number
   cpuOffloaded: number
   total: number
   fits: boolean
@@ -62,6 +67,7 @@ export function calculateVRAM(input: VRAMInput): VRAMBreakdown {
     paramsBillions, quantization, dtype, contextLength, memFractionStatic,
     cpuOffloadGb, tensorParallelSize, epSize, kvCacheDtype,
     maxRunningRequests, totalVramGb, freeVramGb,
+    enableMultimodal, speculativeAlgorithm, speculativeDraftModelPath
   } = input
 
   const warnings: string[] = []
@@ -96,11 +102,32 @@ export function calculateVRAM(input: VRAMInput): VRAMBreakdown {
   const activationBase = 0.5 * Math.max(1, maxRunningRequests)
   const activations = activationBase * (paramsBillions / 7) / tpFactor
 
-  // 4. Framework overhead
+  // 4. Vision Tower (Multimodal)
+  const visionTower = enableMultimodal ? 1.5 : 0.0
+
+  // 5. Speculative Decoding
+  let speculative = 0.0
+  if (speculativeAlgorithm) {
+    if (speculativeDraftModelPath) {
+      let draftParams = 1.0
+      const match = speculativeDraftModelPath.match(/[-_/](\d+(\.\d+)?)[bB]/)
+      if (match) {
+        draftParams = parseFloat(match[1])
+      }
+      const draftRawGb = draftParams * bytesPerParam
+      speculative = draftRawGb / tpFactor
+    } else if (speculativeAlgorithm.toUpperCase() === 'EAGLE') {
+      speculative = Math.max(1.0, modelWeights * 0.15)
+    } else if (speculativeAlgorithm.toUpperCase() === 'NGRAM') {
+      speculative = 0.2
+    }
+  }
+
+  // 6. Framework overhead
   const frameworkOverhead = 1.5
 
   // Total
-  const total = modelWeights + kvCache + activations + frameworkOverhead
+  const total = modelWeights + kvCache + activations + frameworkOverhead + visionTower + speculative
   const freeAfterModel = freeVramGb - modelWeights
   const freeAfterAll = totalVramGb - total
 
@@ -127,6 +154,8 @@ export function calculateVRAM(input: VRAMInput): VRAMBreakdown {
     kvCache: Math.round(kvCache * 100) / 100,
     activations: Math.round(activations * 100) / 100,
     frameworkOverhead,
+    visionTower: Math.round(visionTower * 100) / 100,
+    speculative: Math.round(speculative * 100) / 100,
     cpuOffloaded: Math.round(cpuOffloaded * 100) / 100,
     total: Math.round(total * 100) / 100,
     fits,

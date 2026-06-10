@@ -84,16 +84,40 @@ function GPUStatusBar() {
   )
 }
 
+function estimateParamsFromPath(path: string): number {
+  const match = path.match(/[-_/](\d+(\.\d+)?)[bB]/)
+  if (match) {
+    return parseFloat(match[1])
+  }
+  return 0
+}
+
+function estimateQuantFromPath(path: string): string {
+  const lower = path.toLowerCase()
+  if (lower.includes('awq')) return 'awq'
+  if (lower.includes('gptq')) return 'gptq'
+  if (lower.includes('fp8')) return 'fp8'
+  if (lower.includes('int4') || lower.includes('4bit')) return 'int4'
+  if (lower.includes('int8') || lower.includes('8bit')) return 'int8'
+  return ''
+}
+
 function VRAMAdvisor() {
   const { selectedModel, config, advanced, gpuStatus } = useServerStore()
-  if (!selectedModel || !gpuStatus || !gpuStatus.gpus?.length) return null
+  if (!gpuStatus || !gpuStatus.gpus?.length) return null
   const gpu = gpuStatus.gpus[0]
 
+  const path = config.model_path
+  if (!path) return null
+
+  const paramsBillions = selectedModel?.params_billions || estimateParamsFromPath(path) || 7.0
+  const quantization = config.quantization || selectedModel?.quantization || estimateQuantFromPath(path) || 'auto'
+
   const vram = calculateVRAM({
-    paramsBillions: selectedModel.params_billions || 0,
-    quantization: config.quantization || selectedModel.quantization || 'auto',
+    paramsBillions,
+    quantization,
     dtype: config.dtype || 'auto',
-    contextLength: config.context_length || selectedModel.context_length || 4096,
+    contextLength: config.context_length || selectedModel?.context_length || 4096,
     memFractionStatic: advanced.mem_fraction_static,
     cpuOffloadGb: advanced.cpu_offload_gb,
     tensorParallelSize: config.tensor_parallel_size,
@@ -102,11 +126,16 @@ function VRAMAdvisor() {
     maxRunningRequests: advanced.max_running_requests || 2,
     totalVramGb: gpu.total_mb / 1024,
     freeVramGb: gpu.free_mb / 1024,
+    enableMultimodal: config.enable_multimodal,
+    speculativeAlgorithm: advanced.speculative_algorithm,
+    speculativeDraftModelPath: advanced.speculative_draft_model_path,
   })
 
-  const modelPct = vram.modelWeights / vram.totalVramGb * 100
-  const kvPct = vram.kvCache / vram.totalVramGb * 100
-  const overheadPct = (vram.activations + vram.frameworkOverhead) / vram.totalVramGb * 100
+  const modelPct = (vram.modelWeights / vram.totalVramGb) * 100
+  const kvPct = (vram.kvCache / vram.totalVramGb) * 100
+  const visionPct = (vram.visionTower / vram.totalVramGb) * 100
+  const specPct = (vram.speculative / vram.totalVramGb) * 100
+  const overheadPct = ((vram.activations + vram.frameworkOverhead) / vram.totalVramGb) * 100
 
   return (
     <Card className={cn("border shadow-sm", vram.fits ? "border-success/30 bg-success/5" : "border-danger/30 bg-danger/5")}>
@@ -124,6 +153,8 @@ function VRAMAdvisor() {
         <div className="h-3.5 bg-surface-2 rounded-full overflow-hidden flex">
           <div style={{ width: `${modelPct}%` }} className="h-full bg-primary" title={`Model weights: ${vram.modelWeights.toFixed(1)}GB`} />
           <div style={{ width: `${kvPct}%` }} className="h-full bg-violet-400" title={`KV cache: ${vram.kvCache.toFixed(1)}GB`} />
+          {visionPct > 0 && <div style={{ width: `${visionPct}%` }} className="h-full bg-emerald-400" title={`Vision Tower: ${vram.visionTower.toFixed(1)}GB`} />}
+          {specPct > 0 && <div style={{ width: `${specPct}%` }} className="h-full bg-amber-400" title={`Speculative: ${vram.speculative.toFixed(1)}GB`} />}
           <div style={{ width: `${overheadPct}%` }} className="h-full bg-neutral-400" title={`Overhead: ${(vram.activations + vram.frameworkOverhead).toFixed(1)}GB`} />
         </div>
 
@@ -141,6 +172,17 @@ function VRAMAdvisor() {
             <strong className="font-semibold text-text">{vram.total.toFixed(1)} GB</strong>
           </div>
         </div>
+
+        {(vram.visionTower > 0 || vram.speculative > 0) && (
+          <div className="flex flex-wrap gap-2 text-[10px] text-text-muted">
+            {vram.visionTower > 0 && (
+              <span>• Vision Tower: <strong className="text-text">{vram.visionTower.toFixed(1)} GB</strong></span>
+            )}
+            {vram.speculative > 0 && (
+              <span>• Speculative ({advanced.speculative_algorithm}): <strong className="text-text">{vram.speculative.toFixed(1)} GB</strong></span>
+            )}
+          </div>
+        )}
 
         {!vram.fits && (
           <p className="text-[10px] text-danger font-medium leading-normal mt-1">

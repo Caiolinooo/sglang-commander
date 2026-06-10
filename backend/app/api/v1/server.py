@@ -80,6 +80,9 @@ async def vram_estimate(req: dict):
     kv_cache_dtype = req.get("kv_cache_dtype", "auto")
     max_running = req.get("max_running_requests", 2)
     mem_fraction = req.get("mem_fraction_static", 0.88)
+    enable_multimodal = req.get("enable_multimodal", False)
+    speculative_algorithm = req.get("speculative_algorithm", "")
+    speculative_draft_model_path = req.get("speculative_draft_model_path", "")
 
     # Get GPU info
     gpu = model_manager._get_gpu()
@@ -118,10 +121,32 @@ async def vram_estimate(req: dict):
     # Activations
     act = 0.5 * max(1, max_running) * (max(1, params_b) / 7) / max(1, tp)
 
+    # Vision Tower (Multimodal)
+    vision_tower_vram = 1.5 if enable_multimodal else 0.0
+
+    # Speculative Decoding
+    speculative_vram = 0.0
+    if speculative_algorithm:
+        if speculative_draft_model_path:
+            draft_params = 1.0  # default fallback
+            import re
+            match = re.search(r"(\d+(\.\d+)?)[bB]", speculative_draft_model_path)
+            if match:
+                try:
+                    draft_params = float(match.group(1))
+                except Exception:
+                    pass
+            draft_raw_weights = draft_params * bytes_per_param
+            speculative_vram = draft_raw_weights / max(1, tp)
+        elif speculative_algorithm.upper() == "EAGLE":
+            speculative_vram = max(1.0, model_weights * 0.15)
+        elif speculative_algorithm.upper() == "NGRAM":
+            speculative_vram = 0.2
+
     # Overhead
     overhead = 1.5
 
-    total = weights_on_gpu + kv_cache + act + overhead
+    total = weights_on_gpu + kv_cache + act + overhead + vision_tower_vram + speculative_vram
     fits = total <= free_gb * 0.95
 
     return {
@@ -131,6 +156,8 @@ async def vram_estimate(req: dict):
         "cpu_offloaded": round(cpu_offloaded, 2),
         "kv_cache": round(kv_cache, 2),
         "activations": round(act, 2),
+        "vision_tower": round(vision_tower_vram, 2),
+        "speculative": round(speculative_vram, 2),
         "overhead": overhead,
         "total": round(total, 2),
         "free_before": round(free_gb, 2),
