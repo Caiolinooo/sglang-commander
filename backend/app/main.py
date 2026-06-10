@@ -36,16 +36,15 @@ class DynamicSPAStaticFiles:
     """Wrapper that resolves static files dynamically only when a directory exists,
     bypassing Starlette's compile-time routing checks and allowing late compilation.
     """
-    def __init__(self, directory: str, html: bool = True, name: str = None):
+    def __init__(self, directory: str, html: bool = True):
         self.directory = directory
         self.html = html
-        self.name = name
         self._static_files = None
 
     async def __call__(self, scope, receive, send):
         if self._static_files is None:
             if os.path.isdir(self.directory):
-                self._static_files = SPAStaticFiles(directory=self.directory, html=self.html, name=self.name)
+                self._static_files = SPAStaticFiles(directory=self.directory, html=self.html)
             else:
                 async def not_found(scope, receive, send):
                     await send({
@@ -127,9 +126,6 @@ app.add_middleware(
 
 app.include_router(api_router)
 
-# Mount frontend wrapper at the root level outside lifespan so Starlette compiles the routing path correctly.
-frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
-app.mount("/", DynamicSPAStaticFiles(directory=frontend_path, html=True, name="frontend"), name="frontend")
 
 
 @app.get("/api/health")
@@ -159,6 +155,11 @@ async def _metrics_broadcaster():
         snapshot = metrics_collector.get_latest()
         if snapshot:
             await ws_manager.broadcast(snapshot)
+
+
+# Mount frontend wrapper at the root level last so Starlette matches more specific api/websocket routes first.
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+app.mount("/", DynamicSPAStaticFiles(directory=frontend_path, html=True), name="frontend")
 
 
 def run():
