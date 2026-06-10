@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import os
 import sys
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -72,6 +74,62 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class VerboseLoggingMiddleware(BaseHTTPMiddleware):
+    """Logs all incoming requests and outgoing responses with redacted secrets in DEBUG mode."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not logger.isEnabledFor(logging.DEBUG):
+            return await call_next(request)
+
+        start_time = time.time()
+        method = request.method
+        path = request.url.path
+        query = request.url.query
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Redact sensitive headers
+        headers = dict(request.headers)
+        sensitive_headers = {"authorization", "cookie", "x-token", "token"}
+        for k in list(headers.keys()):
+            if k.lower() in sensitive_headers:
+                headers[k] = "[REDACTED]"
+
+        # Read body and restore stream so endpoint can parse it
+        body_str = ""
+        if request.method in ("POST", "PUT", "PATCH"):
+            body_bytes = await request.body()
+            async def receive():
+                return {"type": "http.request", "body": body_bytes, "more_body": False}
+            request._receive = receive
+            
+            try:
+                body_json = json.loads(body_bytes.decode())
+                sensitive_keys = {"password", "token", "hf_token", "refresh_token", "access_token"}
+                def redact(d):
+                    if isinstance(d, dict):
+                        return {k: ("[REDACTED]" if k.lower() in sensitive_keys else redact(v)) for k, v in d.items()}
+                    elif isinstance(d, list):
+                        return [redact(x) for x in d]
+                    return d
+                body_str = json.dumps(redact(body_json))
+            except Exception:
+                body_str = body_bytes.decode(errors="ignore")[:500]
+
+        logger.debug(
+            f"Incoming Request: {method} {path} "
+            f"query='{query}' client={client_ip} headers={headers} body={body_str}"
+        )
+
+        response = await call_next(request)
+        duration = (time.time() - start_time) * 1000
+        
+        logger.debug(
+            f"Outgoing Response: {method} {path} "
+            f"status={response.status_code} duration={duration:.2f}ms"
+        )
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{__version__}")
@@ -112,8 +170,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Request ID middleware (must be added before CORS)
+# Request ID and Verbose Logging middlewares
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(VerboseLoggingMiddleware)
 
 # CORS — configurable, no more wildcard by default
 app.add_middleware(
