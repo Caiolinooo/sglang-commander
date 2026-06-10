@@ -87,12 +87,45 @@ async def auto_fix(check_name: str, current_user: User = Depends(get_current_use
         "all-compat":    [python_cmd, "-m", "pip", "install", "transformers==5.6.0", "kernels==0.10.0", "sglang"],
     }
 
-    if check_name not in cmds:
+    # Normalize check name
+    normalized_name = check_name.lower().replace("_", " ").replace("-", " ")
+    target_key = check_name
+    if "sglang" in normalized_name:
+        target_key = "sglang"
+    elif "transformers" in normalized_name:
+        target_key = "transformers"
+    elif "kernels" in normalized_name:
+        target_key = "kernels"
+    elif "flash" in normalized_name:
+        target_key = "flash-attn"
+    elif "triton" in normalized_name:
+        target_key = "triton"
+    elif "torch" in normalized_name:
+        target_key = "torch"
+
+    if target_key not in cmds:
         return {"status": "error", "message": f"Unknown check: {check_name}. Available: {list(cmds.keys())}"}
+
+    cmd_to_run = cmds[target_key]
+
+    # If sglang import fails, extract the specific suggested fix (e.g. transformers==5.6.0) from diagnostics
+    if target_key == "sglang":
+        try:
+            from app.services.diagnostics import run_full_diagnostics
+            diag = await run_full_diagnostics(python_cmd)
+            sglang_check = next((c for c in diag.checks if c["name"] == "sglang installation"), None)
+            if sglang_check and not sglang_check["ok"] and sglang_check.get("fix"):
+                fix_sug = sglang_check["fix"]
+                prefix = f"{python_cmd} -m pip install "
+                if fix_sug.startswith(prefix):
+                    import shlex
+                    cmd_to_run = [python_cmd, "-m", "pip", "install"] + shlex.split(fix_sug[len(prefix):].strip())
+        except Exception:
+            pass
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            *cmds[check_name],
+            *cmd_to_run,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -100,19 +133,19 @@ async def auto_fix(check_name: str, current_user: User = Depends(get_current_use
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180.0)
         except asyncio.TimeoutError:
             proc.kill()
-            return {"status": "error", "message": f"Install timed out after 180s. Try manually:\n  {' '.join(cmds[check_name])}"}
+            return {"status": "error", "message": f"Install timed out after 180s. Try manually:\n  {' '.join(cmd_to_run)}"}
 
         if proc.returncode == 0:
             return {
                 "status": "ok",
-                "message": f"{check_name} installed/upgraded successfully. Run diagnostics again to verify.",
+                "message": f"{target_key} installed/upgraded successfully. Run diagnostics again to verify.",
                 "stdout_tail": (stdout or b"").decode(errors="replace")[-400:],
             }
         else:
             err_tail = (stderr or stdout or b"").decode(errors="replace")[-600:]
             return {
                 "status": "error",
-                "message": f"{check_name} install failed. Manual fix:\n  {' '.join(cmds[check_name])}",
+                "message": f"{target_key} install failed. Manual fix:\n  {' '.join(cmd_to_run)}",
                 "error_tail": err_tail,
             }
     except Exception as e:

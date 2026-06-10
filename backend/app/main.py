@@ -32,6 +32,36 @@ class SPAStaticFiles(StaticFiles):
             raise ex
 
 
+class DynamicSPAStaticFiles:
+    """Wrapper that resolves static files dynamically only when a directory exists,
+    bypassing Starlette's compile-time routing checks and allowing late compilation.
+    """
+    def __init__(self, directory: str, html: bool = True, name: str = None):
+        self.directory = directory
+        self.html = html
+        self.name = name
+        self._static_files = None
+
+    async def __call__(self, scope, receive, send):
+        if self._static_files is None:
+            if os.path.isdir(self.directory):
+                self._static_files = SPAStaticFiles(directory=self.directory, html=self.html, name=self.name)
+            else:
+                async def not_found(scope, receive, send):
+                    await send({
+                        "type": "http.response.start",
+                        "status": 404,
+                        "headers": [(b"content-type", b"text/plain")],
+                    })
+                    await send({
+                        "type": "http.response.body",
+                        "body": f"Frontend build directory '{self.directory}' not found. Please build the frontend first.".encode(),
+                    })
+                await not_found(scope, receive, send)
+                return
+        await self._static_files(scope, receive, send)
+
+
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Attach a unique request ID to each request for tracing."""
 
@@ -64,10 +94,8 @@ async def lifespan(app: FastAPI):
     await metrics_collector.start()
     asyncio.create_task(_metrics_broadcaster())
 
-    frontend_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
-    frontend_path = os.path.abspath(frontend_path)
+    frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
     if os.path.exists(frontend_path):
-        app.mount("/", SPAStaticFiles(directory=frontend_path, html=True), name="frontend")
         logger.info(f"Serving frontend from {frontend_path}")
     else:
         logger.info(f"No frontend build found at {frontend_path}, API only")
@@ -98,6 +126,10 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+# Mount frontend wrapper at the root level outside lifespan so Starlette compiles the routing path correctly.
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+app.mount("/", DynamicSPAStaticFiles(directory=frontend_path, html=True, name="frontend"), name="frontend")
 
 
 @app.get("/api/health")

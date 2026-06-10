@@ -281,7 +281,7 @@ class SglangBackend(BackendProvider):
     async def _try_autofix(
         self, diag, python_cmd: str
     ):
-        """Attempt one-shot auto-fix for transformers/kernels issues."""
+        """Attempt one-shot auto-fix for sglang/transformers/kernels issues."""
         from app.services.diagnostics import run_full_diagnostics
 
         sglang_check = next(
@@ -291,19 +291,24 @@ class SglangBackend(BackendProvider):
             return diag
 
         fix_sug = sglang_check.get("fix", "")
-        if "transformers" not in fix_sug or "kernels" not in fix_sug:
+        prefix = f"{python_cmd} -m pip install "
+        if not fix_sug or not fix_sug.startswith(prefix):
             msg = f"Cannot auto-fix. Run: {fix_sug}"
             self._log_lines.append(f"[ERROR] {msg}")
             return diag
 
+        args_str = fix_sug[len(prefix):].strip()
+        import shlex
+        args = shlex.split(args_str)
+
         self._log_lines.append(
-            "[WARN] Attempting one-shot auto-fix (transformers 5.6.0 + kernels 0.10.0)..."
+            f"[WARN] Attempting one-shot auto-fix: pip install {args_str}..."
         )
         try:
             fix = await asyncio.create_subprocess_exec(
                 python_cmd, "-m", "pip", "install", "--quiet",
                 "--no-warn-script-location",
-                "transformers==5.6.0", "kernels==0.10.0",
+                *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

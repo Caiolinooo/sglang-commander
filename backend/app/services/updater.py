@@ -136,8 +136,8 @@ class Updater:
             return {"status": "error", "error": str(e)}
 
     async def cancel_download(self) -> dict:
-        self._download_progress = {"status": "cancelled", "progress": 0.0}
         temp_path = self._download_progress.get("path")
+        self._download_progress = {"status": "cancelled", "progress": 0.0}
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
         return {"status": "cancelled"}
