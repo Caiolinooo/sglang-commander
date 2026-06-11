@@ -95,3 +95,13 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_rebuild_and_restart)
     return {"status": "ok", "message": "Rebuild and restart triggered"}
 
+
+@router.get("/webhook")
+async def webhook_info():
+    """Friendly message for browser testing."""
+    return {
+        "status": "active",
+        "message": "Webhook endpoint is working. Please send a POST request (GitHub webhook) to trigger the rebuild."
+    }
+
+
