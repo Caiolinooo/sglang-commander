@@ -22,7 +22,8 @@ import {
   getMetricsHistory,
   startServer as apiStartServer,
   stopServer as apiStopServer,
-  restartServer as apiRestartServer
+  restartServer as apiRestartServer,
+  getArgsRegistry
 } from '../api/endpoints'
 import { validateConfig } from '../utils/validation'
 import type { ValidationIssue } from '../utils/validation'
@@ -120,6 +121,7 @@ interface ServerState {
   validation: any | null
   selectedModel: LocalModel | null
   flagIssues: ValidationIssue[]
+  argsRegistry: any[]
   config: {
     model_path: string
     host: string
@@ -150,6 +152,7 @@ interface ServerState {
   scanModels: () => Promise<void>
   fetchGPU: () => Promise<void>
   runValidation: () => Promise<void>
+  fetchArgsRegistry: () => Promise<void>
   loadProfile: (profile: ServerProfile) => void
   selectLocalModel: (model: LocalModel) => void
   startServer: () => Promise<void>
@@ -171,6 +174,7 @@ export const useServerStore = create<ServerState>((set, get) => ({
   validation: null,
   selectedModel: null,
   flagIssues: [],
+  argsRegistry: [],
   config: {
     model_path: '', host: '127.0.0.1', port: 30000, tensor_parallel_size: 1,
     quantization: '', dtype: 'auto', context_length: 0, enable_multimodal: false, trust_remote_code: false,
@@ -249,6 +253,12 @@ export const useServerStore = create<ServerState>((set, get) => ({
         set({ validation: { valid: false, errors: [e.message || 'Validation failed'], warnings: [], suggestions: [] } })
       }
     }
+  },
+  fetchArgsRegistry: async () => {
+    try {
+      const r = await getArgsRegistry()
+      set({ argsRegistry: r.data.args || [] })
+    } catch {}
   },
   loadProfile: (profile) => {
     let args: Record<string, unknown> = {}

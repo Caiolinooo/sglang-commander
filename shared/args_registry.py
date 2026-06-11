@@ -29,6 +29,7 @@ ARGS_REGISTRY = [
         "description": "HuggingFace repo ID (e.g., meta-llama/Llama-3.1-8B-Instruct) or local path to model weights",
         "example": "--model-path meta-llama/Llama-3.1-8B-Instruct",
         "required": True,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--tokenizer-path",
@@ -39,6 +40,7 @@ ARGS_REGISTRY = [
         "description": "Path to a separate tokenizer (if different from model path)",
         "example": "--tokenizer-path /path/to/tokenizer",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--tokenizer-mode",
@@ -50,6 +52,7 @@ ARGS_REGISTRY = [
         "description": "Tokenizer mode: 'auto' uses fast tokenizer if available, 'slow' forces slow tokenizer",
         "example": "--tokenizer-mode slow",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--tokenizer-backend",
@@ -61,6 +64,7 @@ ARGS_REGISTRY = [
         "description": "Tokenizer backend library to use",
         "example": "--tokenizer-backend fastokens",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--trust-remote-code",
@@ -71,6 +75,7 @@ ARGS_REGISTRY = [
         "description": "Allow loading models with custom HuggingFace modeling code. Required for some community models.",
         "example": "--trust-remote-code",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--context-length",
@@ -81,6 +86,7 @@ ARGS_REGISTRY = [
         "description": "Override the model's maximum context length (number of tokens). Useful for extending context.",
         "example": "--context-length 32768",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--revision",
@@ -91,6 +97,7 @@ ARGS_REGISTRY = [
         "description": "Git branch, tag, or commit hash for the model on HuggingFace Hub",
         "example": "--revision v1.0",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--load-format",
@@ -102,6 +109,7 @@ ARGS_REGISTRY = [
         "description": "Format for loading model weights. 'auto' tries safetensors first, falls back to pt.",
         "example": "--load-format safetensors",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--dtype",
@@ -113,6 +121,7 @@ ARGS_REGISTRY = [
         "description": "Data type for model weights and computation. 'auto' selects based on model config.",
         "example": "--dtype bfloat16",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--model-impl",
@@ -124,6 +133,7 @@ ARGS_REGISTRY = [
         "description": "Model implementation backend. 'auto' tries sglang native first, falls back to transformers.",
         "example": "--model-impl transformers",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--is-embedding",
@@ -134,6 +144,7 @@ ARGS_REGISTRY = [
         "description": "Run the model as an embedding model (returns vectors instead of text)",
         "example": "--is-embedding",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--skip-tokenizer-init",
@@ -144,6 +155,7 @@ ARGS_REGISTRY = [
         "description": "Skip tokenizer initialization on startup",
         "example": "--skip-tokenizer-init",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Server & Networking =====
@@ -156,6 +168,7 @@ ARGS_REGISTRY = [
         "description": "Bind address for the HTTP server. Use 0.0.0.0 to allow external connections.",
         "example": "--host 0.0.0.0",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--port",
@@ -166,6 +179,7 @@ ARGS_REGISTRY = [
         "description": "HTTP server port",
         "example": "--port 30000",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--api-key",
@@ -176,6 +190,7 @@ ARGS_REGISTRY = [
         "description": "API key required for all requests (similar to OpenAI API key)",
         "example": "--api-key sk-sglang-secret",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--served-model-name",
@@ -186,6 +201,7 @@ ARGS_REGISTRY = [
         "description": "Custom name for the model exposed in the API (GET /v1/models)",
         "example": "--served-model-name my-model",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--ssl-keyfile",
@@ -196,6 +212,7 @@ ARGS_REGISTRY = [
         "description": "Path to SSL key file for HTTPS",
         "example": "--ssl-keyfile /path/to/key.pem",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--ssl-certfile",
@@ -206,6 +223,7 @@ ARGS_REGISTRY = [
         "description": "Path to SSL certificate file for HTTPS",
         "example": "--ssl-certfile /path/to/cert.pem",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-http2",
@@ -216,6 +234,7 @@ ARGS_REGISTRY = [
         "description": "Enable HTTP/2 support",
         "example": "--enable-http2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--grpc-mode",
@@ -226,6 +245,7 @@ ARGS_REGISTRY = [
         "description": "Run in gRPC mode instead of HTTP",
         "example": "--grpc-mode",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--chat-template",
@@ -236,6 +256,7 @@ ARGS_REGISTRY = [
         "description": "Custom chat template name or path for formatting multi-turn conversations",
         "example": "--chat-template tool_use",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Parallelism & Distribution =====
@@ -249,6 +270,7 @@ ARGS_REGISTRY = [
         "choices": ["1", "2", "4", "8"],
         "example": "--tensor-parallel-size 2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--pipeline-parallel-size",
@@ -259,6 +281,7 @@ ARGS_REGISTRY = [
         "description": "Number of stages for pipeline parallelism. Splits layers into stages across GPUs.",
         "example": "--pipeline-parallel-size 2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--data-parallel-size",
@@ -269,6 +292,7 @@ ARGS_REGISTRY = [
         "description": "Number of data parallel replicas. Replicates full model across GPUs for highest throughput.",
         "example": "--data-parallel-size 2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--expert-parallel-size",
@@ -279,6 +303,7 @@ ARGS_REGISTRY = [
         "description": "Number of GPUs for expert parallelism (MoE models). Distributes experts across GPUs.",
         "example": "--expert-parallel-size 2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--nnodes",
@@ -289,6 +314,7 @@ ARGS_REGISTRY = [
         "description": "Number of nodes for multi-node tensor parallelism",
         "example": "--nnodes 2",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--node-rank",
@@ -299,6 +325,7 @@ ARGS_REGISTRY = [
         "description": "Rank of this node in multi-node setup (0-indexed)",
         "example": "--node-rank 0",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--dist-init-addr",
@@ -309,6 +336,7 @@ ARGS_REGISTRY = [
         "description": "Master address for distributed initialization (required for multi-node)",
         "example": "--dist-init-addr 192.168.1.1:5000",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-dp-attention",
@@ -319,6 +347,7 @@ ARGS_REGISTRY = [
         "description": "Enable data parallel attention (hybrid: DP for attention, TP for FFN)",
         "example": "--enable-dp-attention",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Memory & KV Cache =====
@@ -331,6 +360,7 @@ ARGS_REGISTRY = [
         "description": "Fraction of GPU memory allocated for weights + KV cache pool. Lower values reserve more for overhead.",
         "example": "--mem-fraction-static 0.8",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--max-total-tokens",
@@ -341,6 +371,7 @@ ARGS_REGISTRY = [
         "description": "Maximum number of tokens in the KV cache pool. Auto-calculated based on available memory.",
         "example": "--max-total-tokens 65536",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--page-size",
@@ -351,6 +382,7 @@ ARGS_REGISTRY = [
         "description": "Number of tokens per KV cache page. Larger pages reduce overhead but waste memory.",
         "example": "--page-size 16",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--kv-cache-dtype",
@@ -362,6 +394,7 @@ ARGS_REGISTRY = [
         "description": "Data type for KV cache. FP8 reduces memory by ~50% vs FP16 with minimal quality loss.",
         "example": "--kv-cache-dtype fp8_e4m3",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--disable-radix-cache",
@@ -372,6 +405,7 @@ ARGS_REGISTRY = [
         "description": "Disable RadixAttention prefix caching (may reduce throughput for shared-prefix workloads)",
         "example": "--disable-radix-cache",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-hierarchical-cache",
@@ -382,6 +416,7 @@ ARGS_REGISTRY = [
         "description": "Enable hierarchical KV cache (HiCache) for CPU + GPU tiered caching",
         "example": "--enable-hierarchical-cache",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--cpu-offload-gb",
@@ -392,6 +427,7 @@ ARGS_REGISTRY = [
         "description": "Offload KV cache to CPU when GPU memory is full (experimental)",
         "example": "--cpu-offload-gb 16",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--radix-eviction-policy",
@@ -403,6 +439,7 @@ ARGS_REGISTRY = [
         "description": "Eviction policy for RadixAttention prefix cache. LRU evicts least recently used prefixes.",
         "example": "--radix-eviction-policy lfu",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Scheduling =====
@@ -415,6 +452,7 @@ ARGS_REGISTRY = [
         "description": "Maximum number of requests that can run concurrently",
         "example": "--max-running-requests 64",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--max-queued-requests",
@@ -425,6 +463,7 @@ ARGS_REGISTRY = [
         "description": "Maximum number of requests that can be queued",
         "example": "--max-queued-requests 128",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--schedule-policy",
@@ -436,6 +475,7 @@ ARGS_REGISTRY = [
         "description": "Scheduling policy for request batching. FCFS = First Come First Served. LPM = Longest Prefix Match.",
         "example": "--schedule-policy lpm",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--chunked-prefill-size",
@@ -446,6 +486,7 @@ ARGS_REGISTRY = [
         "description": "Number of tokens per chunk during prefill. Chunking prevents OOM on long prompts.",
         "example": "--chunked-prefill-size 4096",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--max-prefill-tokens",
@@ -456,6 +497,7 @@ ARGS_REGISTRY = [
         "description": "Maximum tokens in a single prefill batch",
         "example": "--max-prefill-tokens 8192",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-priority-scheduling",
@@ -466,6 +508,7 @@ ARGS_REGISTRY = [
         "description": "Enable priority-based request scheduling. Requires clients to set priority header.",
         "example": "--enable-priority-scheduling",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--schedule-conservativeness",
@@ -476,6 +519,7 @@ ARGS_REGISTRY = [
         "description": "Higher values make scheduling more conservative (fewer preemptions). Range: 0.0 to 1.0.",
         "example": "--schedule-conservativeness 0.5",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Quantization & Data Types =====
@@ -489,6 +533,7 @@ ARGS_REGISTRY = [
         "description": "Quantization method for the model. Reduces memory usage and can improve throughput.",
         "example": "--quantization awq",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-fp32-lm-head",
@@ -499,6 +544,7 @@ ARGS_REGISTRY = [
         "description": "Keep the LM head (final logits layer) in FP32 for better accuracy",
         "example": "--enable-fp32-lm-head",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Multimodal =====
@@ -511,6 +557,7 @@ ARGS_REGISTRY = [
         "description": "Enable multimodal support (vision, audio). Required for VLMs and audio models.",
         "example": "--enable-multimodal",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--keep-mm-feature-on-device",
@@ -521,6 +568,7 @@ ARGS_REGISTRY = [
         "description": "Keep multimodal features (image embeddings) on GPU. Lower latency but more VRAM usage.",
         "example": "--keep-mm-feature-on-device",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--mm-attention-backend",
@@ -532,6 +580,7 @@ ARGS_REGISTRY = [
         "description": "Attention backend for multimodal processing",
         "example": "--mm-attention-backend fa3",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--limit-mm-data-per-request",
@@ -542,6 +591,7 @@ ARGS_REGISTRY = [
         "description": "Maximum number of multimodal items (images/video frames) per request",
         "example": "--limit-mm-data-per-request 5",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--disable-fast-image-processor",
@@ -552,6 +602,7 @@ ARGS_REGISTRY = [
         "description": "Disable fast image processor (fall back to HF image processor)",
         "example": "--disable-fast-image-processor",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Speculative Decoding =====
@@ -565,6 +616,7 @@ ARGS_REGISTRY = [
         "description": "Speculative decoding algorithm. Uses a smaller draft model to predict tokens, verified by target model.",
         "example": "--speculative-algorithm eagle",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--speculative-draft-model-path",
@@ -575,6 +627,7 @@ ARGS_REGISTRY = [
         "description": "Path to the draft model used for speculative decoding (usually smaller than target model)",
         "example": "--speculative-draft-model-path meta-llama/Llama-3.2-1B-Instruct",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--speculative-num-steps",
@@ -585,6 +638,7 @@ ARGS_REGISTRY = [
         "description": "Number of speculative steps (tokens generated by draft model per verification pass)",
         "example": "--speculative-num-steps 3",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--speculative-eagle-topk",
@@ -595,6 +649,7 @@ ARGS_REGISTRY = [
         "description": "Top-K for EAGLE speculative decoding draft model",
         "example": "--speculative-eagle-topk 8",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--speculative-num-draft-tokens",
@@ -605,6 +660,7 @@ ARGS_REGISTRY = [
         "description": "Number of tokens the draft model generates per step",
         "example": "--speculative-num-draft-tokens 10",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--speculative-ngram-match-type",
@@ -616,6 +672,7 @@ ARGS_REGISTRY = [
         "description": "Match type for n-gram speculative decoding",
         "example": "--speculative-ngram-match-type PROB",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== MoE & Expert Parallel =====
@@ -629,6 +686,7 @@ ARGS_REGISTRY = [
         "description": "Backend for Mixture-of-Experts (MoE) computation",
         "example": "--moe-runner-backend deep_gemm",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--moe-a2a-backend",
@@ -640,6 +698,7 @@ ARGS_REGISTRY = [
         "description": "All-to-all communication backend for expert parallelism",
         "example": "--moe-a2a-backend deepep",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-eplb",
@@ -650,6 +709,7 @@ ARGS_REGISTRY = [
         "description": "Enable Expert Placement Load Balancing for MoE models",
         "example": "--enable-eplb",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Monitoring & Logging =====
@@ -662,6 +722,7 @@ ARGS_REGISTRY = [
         "description": "Enable Prometheus metrics endpoint at /metrics. Required for monitoring dashboard.",
         "example": "--enable-metrics",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-mfu-metrics",
@@ -672,6 +733,7 @@ ARGS_REGISTRY = [
         "description": "Enable Model FLOPs Utilization (MFU) metrics",
         "example": "--enable-mfu-metrics",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--log-requests",
@@ -682,6 +744,7 @@ ARGS_REGISTRY = [
         "description": "Log all HTTP requests received by the server",
         "example": "--log-requests",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--log-level",
@@ -693,6 +756,7 @@ ARGS_REGISTRY = [
         "description": "Logging level for the server",
         "example": "--log-level debug",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--show-time-cost",
@@ -703,6 +767,7 @@ ARGS_REGISTRY = [
         "description": "Show time cost breakdown per request in logs",
         "example": "--show-time-cost",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== LoRA Adapters =====
@@ -715,6 +780,7 @@ ARGS_REGISTRY = [
         "description": "Enable LoRA adapter serving. Allows loading multiple LoRA adapters simultaneously.",
         "example": "--enable-lora",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--max-lora-rank",
@@ -725,6 +791,7 @@ ARGS_REGISTRY = [
         "description": "Maximum rank for LoRA adapters",
         "example": "--max-lora-rank 128",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--max-loras-per-batch",
@@ -735,6 +802,7 @@ ARGS_REGISTRY = [
         "description": "Maximum number of different LoRA adapters in a single batch",
         "example": "--max-loras-per-batch 16",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 
     # ===== Advanced =====
@@ -747,6 +815,7 @@ ARGS_REGISTRY = [
         "description": "Device to run the model on (cuda, cpu, ascend)",
         "example": "--device cpu",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--disable-cuda-graph",
@@ -757,6 +826,7 @@ ARGS_REGISTRY = [
         "description": "Disable CUDA graph optimization. May help with compatibility but reduces performance.",
         "example": "--disable-cuda-graph",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-torch-compile",
@@ -767,6 +837,7 @@ ARGS_REGISTRY = [
         "description": "Enable torch.compile for model optimization",
         "example": "--enable-torch-compile",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--attention-backend",
@@ -778,6 +849,7 @@ ARGS_REGISTRY = [
         "description": "Attention computation backend. Different backends have different performance characteristics.",
         "example": "--attention-backend flashinfer",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--sampling-backend",
@@ -789,6 +861,7 @@ ARGS_REGISTRY = [
         "description": "Backend for token sampling operations",
         "example": "--sampling-backend pytorch",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--grammar-backend",
@@ -800,6 +873,7 @@ ARGS_REGISTRY = [
         "description": "Backend for structured output / grammar-constrained generation (JSON mode)",
         "example": "--grammar-backend outlines",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--random-seed",
@@ -810,6 +884,7 @@ ARGS_REGISTRY = [
         "description": "Random seed for deterministic generation",
         "example": "--random-seed 42",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-cache-report",
@@ -820,6 +895,7 @@ ARGS_REGISTRY = [
         "description": "Enable detailed cache hit/miss reporting",
         "example": "--enable-cache-report",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--watchdog-timeout",
@@ -830,6 +906,7 @@ ARGS_REGISTRY = [
         "description": "Timeout (seconds) for the watchdog thread that monitors server health",
         "example": "--watchdog-timeout 600",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--download-dir",
@@ -840,6 +917,7 @@ ARGS_REGISTRY = [
         "description": "Directory to download HuggingFace models to",
         "example": "--download-dir /data/models",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--base-gpu-id",
@@ -850,6 +928,7 @@ ARGS_REGISTRY = [
         "description": "First GPU ID to use. Useful when you have multiple GPUs and want to skip some.",
         "example": "--base-gpu-id 1",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-metrics-for-all-schedulers",
@@ -860,6 +939,7 @@ ARGS_REGISTRY = [
         "description": "Enable metrics collection for all scheduler types",
         "example": "--enable-metrics-for-all-schedulers",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--allow-auto-truncate",
@@ -870,6 +950,7 @@ ARGS_REGISTRY = [
         "description": "Automatically truncate prompts that exceed context length",
         "example": "--allow-auto-truncate",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--reasoning-parser",
@@ -881,6 +962,7 @@ ARGS_REGISTRY = [
         "description": "Parser for reasoning model outputs (extracts  reasoning content)",
         "example": "--reasoning-parser deepseek-r1",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--tool-call-parser",
@@ -892,6 +974,7 @@ ARGS_REGISTRY = [
         "description": "Parser for tool/function call outputs",
         "example": "--tool-call-parser llama3",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
     {
         "name": "--enable-custom-logit-processor",
@@ -902,6 +985,7 @@ ARGS_REGISTRY = [
         "description": "Enable custom logit processors (for advanced sampling control)",
         "example": "--enable-custom-logit-processor",
         "required": False,
+        "supported_backends": ["sglang", "vllm", "llamacpp", "ollama"],
     },
 ]
 

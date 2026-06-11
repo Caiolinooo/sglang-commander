@@ -9,6 +9,7 @@ class BackendType(str, Enum):
     SGLANG = "sglang"
     LLAMACPP = "llamacpp"
     OLLAMA = "ollama"
+    VLLM = "vllm"
 
 
 class BackendProvider(ABC):

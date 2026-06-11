@@ -69,10 +69,12 @@ def _register_defaults() -> None:
     from app.services.backends.sglang_backend import SglangBackend
     from app.services.backends.llamacpp_backend import LlamaCppBackend
     from app.services.backends.ollama_backend import OllamaBackend
+    from app.services.backends.vllm_backend import VllmBackend
 
     backend_registry.register("sglang", SglangBackend())
     backend_registry.register("llamacpp", LlamaCppBackend())
     backend_registry.register("ollama", OllamaBackend())
+    backend_registry.register("vllm", VllmBackend())
 
 
 _register_defaults()

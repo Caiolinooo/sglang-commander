@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate, saveHuggingFaceToken, validateHFToken, restartProject, restartAndRebuild } from '../api/endpoints'
+import { getSettings, changePassword, checkUpdates, downloadUpdate, getUpdateStatus, applyUpdate, cancelUpdate, saveHuggingFaceToken, validateHFToken, restartProject, restartAndRebuild, checkDependencies, upgradeDependencies, getDependenciesStatus } from '../api/endpoints'
 import { Settings, Lock, RefreshCw, Download, CheckCircle, XCircle, AlertCircle, Search, Key, RotateCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -18,6 +18,11 @@ export default function SettingsPage() {
   const [hfUser, setHfUser] = useState<{ name?: string; email?: string }>({})
   const [restartStatus, setRestartStatus] = useState<'idle' | 'restarting' | 'error'>('idle')
   const [rebuildStatus, setRebuildStatus] = useState<'idle' | 'rebuilding' | 'error'>('idle')
+  const [depUpdates, setDepUpdates] = useState<any[]>([])
+  const [checkingDeps, setCheckingDeps] = useState(false)
+  const [upgradingDeps, setUpgradingDeps] = useState(false)
+  const [depStatusMsg, setDepStatusMsg] = useState('')
+  const [depChecked, setDepChecked] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   useEffect(() => { getSettings().then(r => setSettings(r.data)).catch(() => {}) }, [])
@@ -111,6 +116,47 @@ export default function SettingsPage() {
     } catch {
       setRebuildStatus('error')
       setTimeout(() => setRebuildStatus('idle'), 3000)
+    }
+  }
+
+  const handleCheckDependencies = async () => {
+    setCheckingDeps(true)
+    setDepStatusMsg('')
+    try {
+      const res = await checkDependencies()
+      setDepUpdates(res.data.outdated || [])
+      setDepChecked(true)
+    } catch {} finally {
+      setCheckingDeps(false)
+    }
+  }
+
+  const handleUpgradeDependencies = async () => {
+    if (depUpdates.length === 0) return;
+    setUpgradingDeps(true)
+    setDepStatusMsg('Checking compatibility and updating (this may take a few minutes)...')
+    try {
+      const pkgNames = depUpdates.map(p => p.name)
+      await upgradeDependencies(pkgNames)
+      
+      const poll = setInterval(async () => {
+        try {
+          const s = await getDependenciesStatus()
+          if (s.data.status === 'success' || s.data.status === 'error') {
+            clearInterval(poll)
+            setUpgradingDeps(false)
+            setDepStatusMsg(s.data.status === 'success' ? 'Update successful!' : 'Update failed or blocked due to compatibility. Check server logs.')
+            if (s.data.status === 'success') handleCheckDependencies()
+          } else {
+            if (s.data.logs && s.data.logs.length > 0) {
+              setDepStatusMsg(s.data.logs[s.data.logs.length - 1])
+            }
+          }
+        } catch {}
+      }, 2000)
+    } catch {
+      setUpgradingDeps(false)
+      setDepStatusMsg('Failed to start update.')
     }
   }
 
@@ -318,6 +364,54 @@ export default function SettingsPage() {
                       </Button>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-primary" />
+              <CardTitle>Framework Updates</CardTitle>
+            </div>
+            <CardDescription>Update SGLang, vLLM, Llama.cpp & Ollama securely</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button onClick={handleCheckDependencies} disabled={checkingDeps || upgradingDeps} variant="outline" className="w-full gap-2">
+              <Search className={`w-4 h-4 ${checkingDeps ? 'animate-spin' : ''}`} /> 
+              {checkingDeps ? 'Checking PIP...' : 'Check Frameworks'}
+            </Button>
+            
+            {depChecked && depUpdates.length === 0 && (
+              <div className="text-center py-6 bg-surface-2 rounded-xl border border-dashed border-border">
+                <CheckCircle className="w-8 h-8 text-success mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium text-text">Frameworks up to date</p>
+              </div>
+            )}
+
+            {depUpdates.length > 0 && (
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4 animate-in slide-in-from-bottom-2">
+                <p className="text-sm font-semibold text-primary">Found {depUpdates.length} update(s)</p>
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                  {depUpdates.map(p => (
+                    <div key={p.name} className="flex justify-between items-center text-xs p-2 bg-surface rounded">
+                       <span className="font-semibold text-text">{p.name}</span>
+                       <span className="text-text-muted">{p.current_version} ➔ <span className="text-primary font-bold">{p.latest_version}</span></span>
+                    </div>
+                  ))}
+                </div>
+                
+                <Button onClick={handleUpgradeDependencies} disabled={upgradingDeps} className="w-full gap-2 bg-warning hover:bg-warning/90 text-black">
+                  <Download className="w-4 h-4" /> 
+                  {upgradingDeps ? 'Upgrading...' : 'Safe Upgrade (Check Compatibility)'}
+                </Button>
+                
+                {depStatusMsg && (
+                  <p className="text-[10px] font-mono text-text-muted mt-2 break-all p-2 bg-surface rounded animate-pulse">
+                    {depStatusMsg}
+                  </p>
                 )}
               </div>
             )}

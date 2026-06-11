@@ -29,6 +29,7 @@ export const getServerLogs = (cursor: number = 0) =>
   apiClient.get(`/server/logs?cursor=${cursor}`)
 export const healthCheck = () => apiClient.get('/server/health')
 export const getModelInfo = () => apiClient.get('/server/model-info')
+export const getArgsRegistry = () => apiClient.get<{ args: any[] }>('/server/args-registry')
 export const getVramEstimate = (config: Record<string, unknown>) =>
   apiClient.post<{
     gpu: GPUInfo;
@@ -44,6 +45,7 @@ export const getVramEstimate = (config: Record<string, unknown>) =>
   }>('/server/vram-estimate', config)
 export const validateModel = (config: Record<string, unknown>) =>
   apiClient.post<{ valid: boolean; warnings: string[]; errors: string[]; suggestions: string[]; model_info: any }>('/server/validate', config)
+
 
 // Server Profiles
 export const listServerProfiles = () => apiClient.get<ServerProfile[]>('/server-profiles/')
@@ -152,13 +154,18 @@ export const restartProject = () =>
 export const restartAndRebuild = () =>
   apiClient.post('/settings/restart-and-rebuild')
 
-// Updates
+// Updates (App)
 export const checkUpdates = () => apiClient.get<UpdateCheckResponse>('/update/check')
 export const downloadUpdate = (url: string) =>
   apiClient.post(`/update/download?url=${encodeURIComponent(url)}`)
 export const getUpdateStatus = () => apiClient.get<UpdateStatus>('/update/status')
 export const applyUpdate = () => apiClient.post('/update/apply')
 export const cancelUpdate = () => apiClient.post('/update/cancel')
+
+// Dependencies (Frameworks)
+export const checkDependencies = () => apiClient.get('/dependencies/check')
+export const upgradeDependencies = (packages: string[]) => apiClient.post('/dependencies/upgrade', { packages })
+export const getDependenciesStatus = () => apiClient.get('/dependencies/status')
 
 // Diagnostics
 export const runDiagnostics = (full = false) => apiClient.get<{ can_run: boolean; checks: Array<{ name: string; ok: boolean; message: string; fix?: string; severity: string; full_error?: string }>; errors: string[]; warnings: string[]; fix_suggestions: string[]; versions: Record<string, string>; python: string }>(`/diagnostics/${full ? '?full=1' : ''}`)

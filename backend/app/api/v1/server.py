@@ -195,3 +195,8 @@ async def health_check():
 @router.get("/model-info")
 async def model_info():
     return await server_manager.get_model_info()
+
+@router.get("/args-registry")
+async def get_args_registry():
+    from shared.args_registry import ARGS_REGISTRY
+    return {"args": ARGS_REGISTRY}

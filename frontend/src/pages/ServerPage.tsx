@@ -223,7 +223,7 @@ export default function ServerPage() {
       fetchStatus()
       fetchLogs()
       fetchGPU()
-    }, 4000)
+    }, 1000)
     return () => clearInterval(i)
   }, [])
 
