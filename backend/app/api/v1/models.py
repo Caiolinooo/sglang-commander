@@ -128,7 +128,7 @@ async def deploy_model(
     if req.load_format:
         config["load_format"] = req.load_format
 
-    result = await server_manager.start_server(config)
+    result = await server_manager.start(config)
     return result
 
 

@@ -1,6 +1,15 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 from datetime import datetime
+from enum import Enum
+
+
+class OptimizationProfile(str, Enum):
+    SPEED = "speed"
+    CONTEXT = "context"
+    PRECISION = "precision"
+    BALANCED = "balanced"
+    MEMORY_EFFICIENT = "memory_efficient"
 
 
 class ServerStartRequest(BaseModel):
@@ -46,7 +55,24 @@ class ServerStartRequest(BaseModel):
     # Pipeline parallelism
     pp_size: Optional[int] = Field(default=None, ge=1, description="Pipeline parallelism size")
 
+    # Intelligent optimization
+    optimization_profile: Optional[OptimizationProfile] = Field(default=None, description="Auto-apply optimization profile")
+    auto_adapt: bool = Field(default=True, description="Enable real-time auto-adaptation to prevent OOM")
+    target_gpu_memory_usage: Optional[float] = Field(default=0.9, ge=0.5, le=0.99, description="Target GPU memory usage ratio (0.5-0.99)")
+
     extra_args: dict[str, Any] = Field(default_factory=dict)
+
+
+class AutoAdaptStatus(BaseModel):
+    enabled: bool
+    current_profile: Optional[OptimizationProfile] = None
+    gpu_memory_usage: float = 0.0
+    gpu_memory_total_gb: float = 0.0
+    gpu_memory_used_gb: float = 0.0
+    adaptations_applied: list[str] = []
+    last_adaptation: Optional[str] = None
+    recommended_actions: list[str] = []
+    is_near_oom: bool = False
 
 
 class ServerStatusResponse(BaseModel):

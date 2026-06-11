@@ -3,10 +3,22 @@ from typing import Optional, Any
 
 
 class HFSearchRequest(BaseModel):
-    query: str
+    query: str = ""
     limit: int = Field(default=20, ge=1, le=100)
     task: Optional[str] = None
-    sort: str = "downloads"
+    library: Optional[str] = None
+    license: Optional[str] = None
+    framework: Optional[str] = None
+    language: Optional[str] = None
+    author: Optional[str] = None
+    sort_by: str = "downloads"
+    sort_dir: int = -1
+    min_params: Optional[float] = None
+    max_params: Optional[float] = None
+    quantization: Optional[str] = None
+    format: Optional[str] = None
+    fits_gpu: bool = False
+    multimodal: bool = False
 
 
 class TokenEstimate(BaseModel):
@@ -101,22 +113,3 @@ class DeployModelRequest(BaseModel):
     reasoning_parser: Optional[str] = None
     enable_multimodal: Optional[bool] = None
     load_format: Optional[str] = None
-
-
-class HFSearchRequest(BaseModel):
-    query: str = ""
-    limit: int = Field(default=20, ge=1, le=100)
-    task: Optional[str] = None
-    library: Optional[str] = None
-    license: Optional[str] = None
-    framework: Optional[str] = None
-    language: Optional[str] = None
-    author: Optional[str] = None
-    sort_by: str = "downloads"
-    sort_dir: int = -1
-    min_params: Optional[float] = None
-    max_params: Optional[float] = None
-    quantization: Optional[str] = None
-    format: Optional[str] = None
-    fits_gpu: bool = False
-    multimodal: bool = False

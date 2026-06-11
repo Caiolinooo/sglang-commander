@@ -3,10 +3,65 @@ import json
 import os
 import signal
 import time
-from typing import Optional
+from typing import Optional, Literal
+from enum import Enum
 
 import httpx
+import pynvml
 from app.config import settings
+from app.services.model_manager import _estimate_vram_gb, _estimate_params_billions, _detect_quantization, _detect_format
+
+
+class OptimizationProfile(str, Enum):
+    SPEED = "speed"
+    CONTEXT = "context"
+    PRECISION = "precision"
+    BALANCED = "balanced"
+    MEMORY_EFFICIENT = "memory_efficient"
+
+
+PROFILE_CONFIGS = {
+    OptimizationProfile.SPEED: {
+        "mem_fraction_static": 0.90,
+        "max_running_requests": 128,
+        "kv_cache_dtype": "fp8_e4m3",
+        "disable_cuda_graph": False,
+        "cpu_offload_gb": 0,
+        "dtype": "float16",
+    },
+    OptimizationProfile.CONTEXT: {
+        "mem_fraction_static": 0.85,
+        "max_running_requests": 32,
+        "kv_cache_dtype": "fp8_e4m3",
+        "disable_cuda_graph": True,
+        "cpu_offload_gb": 2,
+        "dtype": "float16",
+    },
+    OptimizationProfile.PRECISION: {
+        "mem_fraction_static": 0.80,
+        "max_running_requests": 64,
+        "kv_cache_dtype": "auto",
+        "disable_cuda_graph": False,
+        "cpu_offload_gb": 0,
+        "dtype": "bfloat16",
+    },
+    OptimizationProfile.BALANCED: {
+        "mem_fraction_static": 0.85,
+        "max_running_requests": 64,
+        "kv_cache_dtype": "fp8_e4m3",
+        "disable_cuda_graph": False,
+        "cpu_offload_gb": 1,
+        "dtype": "float16",
+    },
+    OptimizationProfile.MEMORY_EFFICIENT: {
+        "mem_fraction_static": 0.75,
+        "max_running_requests": 16,
+        "kv_cache_dtype": "fp8_e4m3",
+        "disable_cuda_graph": True,
+        "cpu_offload_gb": 4,
+        "dtype": "float16",
+    },
+}
 
 
 class ServerManager:
@@ -16,6 +71,11 @@ class ServerManager:
         self._start_time: Optional[float] = None
         self._current_config: dict = {}
         self._health_status: str = "unknown"
+        self._auto_adapt_task: Optional[asyncio.Task] = None
+        self._adaptations_applied: list[str] = []
+        self._last_adaptation: Optional[str] = None
+        self._target_gpu_usage: float = 0.9
+        self._auto_adapt_enabled: bool = True
 
     @property
     def is_running(self) -> bool:
@@ -31,12 +91,114 @@ class ServerManager:
             return time.time() - self._start_time
         return None
 
+    def _apply_optimization_profile(self, config: dict) -> dict:
+        """Apply optimization profile settings to config."""
+        profile = config.get("optimization_profile")
+        if not profile:
+            return config
+
+        try:
+            profile_enum = OptimizationProfile(profile)
+            profile_settings = PROFILE_CONFIGS.get(profile_enum, {})
+            for key, value in profile_settings.items():
+                if config.get(key) is None:
+                    config[key] = value
+            self._log_lines.append(f"[PROFILE] Applied {profile} optimization profile")
+        except ValueError:
+            self._log_lines.append(f"[WARN] Unknown optimization profile: {profile}")
+        return config
+
+    def _estimate_model_vram(self, config: dict) -> tuple[float, dict]:
+        """Estimate VRAM needed for the model."""
+        model_path = config.get("model_path", "")
+        quant = config.get("quantization", "")
+        dtype = config.get("dtype", "auto")
+        context_length = config.get("context_length", 4096) or 4096
+
+        params_b = _estimate_params_billions([], model_path)
+        if not params_b:
+            params_b = 7.0
+
+        detected_quant = _detect_quantization([], model_path)
+        final_quant = quant or detected_quant or ("fp16" if dtype == "auto" else dtype)
+
+        vram_gb = _estimate_vram_gb(params_b, final_quant, context_length)
+        return vram_gb, {"params_billions": params_b, "quantization": final_quant}
+
+    def _get_gpu_memory(self) -> tuple[float, float, float]:
+        """Get GPU memory info (total, used, free in GB)."""
+        try:
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            total_gb = mem.total / 1024**3
+            used_gb = mem.used / 1024**3
+            free_gb = mem.free / 1024**3
+            return total_gb, used_gb, free_gb
+        except Exception:
+            return 0.0, 0.0, 0.0
+
+    def _apply_memory_adaptations(self, config: dict, estimated_usage: float) -> dict:
+        """Apply memory adaptations to reduce GPU usage."""
+        adaptations = []
+        
+        # If we're using default settings, apply aggressive adaptations
+        if config.get("mem_fraction_static") == 0.9:
+            config["mem_fraction_static"] = 0.80
+            adaptations.append("Reduced mem_fraction_static from 0.90 to 0.80")
+        
+        if config.get("max_running_requests") == 128:
+            config["max_running_requests"] = 64
+            adaptations.append("Reduced max_running_requests from 128 to 64")
+        
+        if config.get("kv_cache_dtype") is None:
+            config["kv_cache_dtype"] = "fp8_e4m3"
+            adaptations.append("Set kv_cache_dtype to fp8_e4m3")
+        
+        if config.get("disable_cuda_graph") is False:
+            config["disable_cuda_graph"] = True
+            adaptations.append("Enabled disable_cuda_graph")
+        
+        if config.get("cpu_offload_gb") is None or config["cpu_offload_gb"] == 0:
+            config["cpu_offload_gb"] = 2
+            adaptations.append("Set cpu_offload_gb to 2")
+        
+        if config.get("dtype") == "float16":
+            config["dtype"] = "bfloat16"
+            adaptations.append("Changed dtype from float16 to bfloat16")
+        
+        for adaptation in adaptations:
+            self._log_lines.append(f"[ADAPT] {adaptation}")
+            self._adaptations_applied.append(adaptation)
+            self._last_adaptation = adaptation
+        
+        return config
+
     async def start(self, config: dict) -> dict:
         if self.is_running:
             return {"status": "error", "message": "Server is already running"}
 
         self._current_config = config
         self._log_lines = []
+        self._adaptations_applied = []
+        self._last_adaptation = None
+        self._auto_adapt_enabled = config.get("auto_adapt", True)
+        self._target_gpu_usage = config.get("target_gpu_memory_usage", 0.9)
+
+        # Apply optimization profile if specified
+        config = self._apply_optimization_profile(config)
+
+        # Estimate VRAM and check if we need pre-emptive adaptations
+        estimated_vram, model_info = self._estimate_model_vram(config)
+        total_gpu, used_gpu, free_gpu = self._get_gpu_memory()
+
+        if total_gpu > 0:
+            estimated_usage = (used_gpu + estimated_vram) / total_gpu
+            self._log_lines.append(f"[VRAM] Estimated model VRAM: {estimated_vram:.1f}GB, GPU: {used_gpu:.1f}/{total_gpu:.1f}GB used ({estimated_usage*100:.1f}% with model)")
+
+            if estimated_usage > self._target_gpu_usage:
+                self._log_lines.append(f"[ADAPT] Estimated usage ({estimated_usage*100:.1f}%) exceeds target ({self._target_gpu_usage*100:.1f}%), applying pre-emptive adaptations")
+                config = self._apply_memory_adaptations(config, estimated_usage)
 
         model_path = config.get("model_path", "")
         host = config.get("host", settings.sglang_default_host)
