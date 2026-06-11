@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useServerStore } from '../../stores'
 import { Switch } from '../ui/Switch'
 import { Slider } from '../ui/Slider'
@@ -48,8 +48,6 @@ export default function ServerConfigPanel() {
     localModels,
     setConfig,
     setAdvanced,
-    showAdvanced,
-    setShowAdvanced,
     startServer,
     stopServer,
     restartServer,
@@ -193,13 +191,6 @@ export default function ServerConfigPanel() {
     }
   }
 
-  // Filter arguments from registry based on selected backend type
-  const backendArgs = useMemo(() => {
-    if (!argsRegistry) return [];
-    return argsRegistry.filter((a: any) => 
-      a.supported_backends && a.supported_backends.includes(config.backend_type)
-    );
-  }, [argsRegistry, config.backend_type]);
 
   const renderTooltipLabel = (label: string, help: string) => (
     <div className="flex items-center gap-1.5 mb-1.5">

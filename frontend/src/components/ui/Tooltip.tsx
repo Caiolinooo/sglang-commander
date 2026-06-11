@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cn } from './cn'
 
 interface TooltipProps {
-  content: string
+  content: React.ReactNode | string
   children: React.ReactNode
   position?: 'top' | 'bottom' | 'left' | 'right'
   className?: string
