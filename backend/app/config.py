@@ -155,6 +155,7 @@ class Settings(BaseSettings):
     # --- Updates ---
     update_check_url_github: str = "https://api.github.com/repos/Caiolinooo/sglang-commander/releases/latest"
     update_check_url_selfhosted: Optional[str] = None
+    webhook_secret: Optional[str] = None
 
     class Config:
         env_file = ".env"
