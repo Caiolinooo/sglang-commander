@@ -20,7 +20,9 @@ from app.core.database import init_db
 from app.services.metrics_collector import metrics_collector
 from app.websocket.manager import ws_manager
 
-logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO)
+from app.core.logger import setup_logging
+
+setup_logging()
 logger = logging.getLogger(__name__)
 
 

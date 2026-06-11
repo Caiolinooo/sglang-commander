@@ -13,9 +13,12 @@ import time
 from typing import Optional
 
 import httpx
+import logging
 
 from app.config import settings
 from app.services.backends.base import BackendProvider, BackendType
+
+logger = logging.getLogger(__name__)
 
 
 class SglangBackend(BackendProvider):
@@ -382,8 +385,18 @@ class SglangBackend(BackendProvider):
                 if not line:
                     break
                 decoded = line.decode(errors="replace").rstrip()
+                
+                # Append to internal buffer for UI
                 self._log_lines.append(f"[{prefix}] {decoded}")
+                
+                # Forward to Python logger for file/journalctl persistence
+                if prefix == "OUT":
+                    logger.debug(f"[SGLANG-OUT] {decoded}")
+                else:
+                    logger.warning(f"[SGLANG-ERR] {decoded}")
+                    
                 lower = decoded.lower()
+
                 if "health" in lower or "ready" in lower:
                     self._health_status = "healthy"
                 if "error" in lower or "traceback" in lower:
