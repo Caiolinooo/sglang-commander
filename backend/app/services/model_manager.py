@@ -376,7 +376,16 @@ class ModelManager:
             "status": "downloading",
             "progress": 0.0,
             "repo_id": repo_id,
+            "progress_details": {
+                "downloaded_bytes": 0,
+                "total_bytes": 0,
+                "speed": "0 MB/s",
+            },
         }
+
+        def progress_callback(progress: float):
+            if task_id in self._download_tasks:
+                self._download_tasks[task_id]["progress"] = progress
 
         try:
             path = snapshot_download(
@@ -385,6 +394,8 @@ class ModelManager:
                 local_dir_use_symlinks=False,
                 resume_download=True,
                 token=settings.huggingface_token,
+                progress_bar=True,
+                progress_callback=progress_callback,
             )
             self._download_tasks[task_id] = {
                 "status": "completed",
