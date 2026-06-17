@@ -29,6 +29,7 @@ export default function ModelsPage() {
     local,
     searching,
     downloading,
+    downloadProgress,
     tab,
     setTab,
     search,
@@ -160,11 +161,18 @@ export default function ModelsPage() {
                         <Button size="sm" onClick={() => openLaunch(m)} className="flex-1 text-xs gap-1.5 h-8">
                           <Play size={12} /> Launch
                         </Button>
-                        {!isDownloaded && (
+                        {!isDownloaded && (downloading === m.repo_id && downloadProgress ? (
+                          <div className="flex-1 flex flex-col gap-0.5">
+                            <div className="w-full h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                              <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${Math.min(downloadProgress.progress_pct, 100)}%` }} />
+                            </div>
+                            <span className="text-[10px] text-text-muted text-right">{downloadProgress.progress_pct.toFixed(0)}%</span>
+                          </div>
+                        ) : (
                           <Button size="sm" variant="secondary" onClick={() => download(m.repo_id)} disabled={downloading === m.repo_id} className="h-8 px-2">
                             {downloading === m.repo_id ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
                           </Button>
-                        )}
+                        ))}
                       </div>
                     </div>
                   )
@@ -193,6 +201,7 @@ export default function ModelsPage() {
                           onLocate={() => handleLocate(m.repo_id)}
                           onDownload={() => download(m.repo_id)}
                           downloading={downloading === m.repo_id}
+                          progress={downloading === m.repo_id ? downloadProgress : null}
                         />
                       )
                     })}

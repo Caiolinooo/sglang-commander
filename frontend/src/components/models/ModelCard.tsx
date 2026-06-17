@@ -12,6 +12,7 @@ interface ModelCardProps {
   onDownload: () => void
   onDelete?: () => void
   downloading?: boolean
+  progress?: { progress_pct: number; speed_mb: number; total_mb: number } | null
 }
 
 export default function ModelCard({
@@ -22,7 +23,8 @@ export default function ModelCard({
   onLocate,
   onDownload,
   onDelete,
-  downloading = false
+  downloading = false,
+  progress = null
 }: ModelCardProps) {
   const repoId = model.repo_id
   const name = model.model_name || repoId.split('/').pop() || repoId
@@ -134,6 +136,16 @@ export default function ModelCard({
           <Button size="sm" variant="danger" onClick={onDelete} className="h-8 px-2" title="Delete files">
             <Trash2 size={12} />
           </Button>
+        ) : downloading && progress ? (
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="w-full h-2 bg-surface-2 rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${Math.min(progress.progress_pct, 100)}%` }} />
+            </div>
+            <div className="flex justify-between text-[10px] text-text-muted">
+              <span>{progress.progress_pct.toFixed(0)}%</span>
+              <span>{progress.speed_mb.toFixed(1)} MB/s</span>
+            </div>
+          </div>
         ) : (
           <Button size="sm" variant="secondary" onClick={onDownload} disabled={downloading} className="h-8 px-2" title="Download model">
             {downloading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}

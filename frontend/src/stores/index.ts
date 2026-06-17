@@ -10,6 +10,7 @@ import {
   validateModel,
   searchModels,
   downloadModel,
+  getDownloadStatus,
   deleteModel,
   getGPUInfo,
   listConversations,
@@ -470,6 +471,7 @@ interface ModelsState {
   local: LocalModel[]
   searching: boolean
   downloading: string
+  downloadProgress: { progress_pct: number; speed_mb: number; eta_seconds: number; downloaded_mb: number; total_mb: number } | null
   tab: 'quick' | 'hub' | 'local' | 'trending'
   gpuInfo: GPUInfo | null
   filters: ModelSearchFilters
@@ -491,6 +493,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   local: [],
   searching: false,
   downloading: '',
+  downloadProgress: null,
   tab: 'quick',
   gpuInfo: null,
   filters: {},
@@ -509,13 +512,26 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     } catch {} finally { set({ searching: false }) }
   },
   download: async (repoId) => {
-    set({ downloading: repoId })
+    set({ downloading: repoId, downloadProgress: null })
     try {
       await downloadModel(repoId)
+      let done = false
+      while (!done) {
+        let pct = 0
+        try {
+          const resp = await getDownloadStatus(repoId)
+          const d = resp.data as any
+          if (!d || d.status === 'not_found') { done = true; break }
+          pct = d.progress_pct ?? 0
+          set({ downloadProgress: { progress_pct: pct, speed_mb: d.speed_mb ?? 0, eta_seconds: d.eta_seconds ?? 0, downloaded_mb: d.downloaded_mb ?? 0, total_mb: d.total_mb ?? 0 } })
+          if (d.status === 'completed' || d.status === 'error') { done = true; break }
+        } catch { done = true; break }
+        await new Promise(r => setTimeout(r, 1000))
+      }
     } catch (e) {
       console.error(e)
     } finally {
-      set({ downloading: '' })
+      set({ downloading: '', downloadProgress: null })
       get().fetchLocal()
     }
   },
