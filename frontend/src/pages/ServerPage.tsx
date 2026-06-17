@@ -96,11 +96,11 @@ function estimateParamsFromPath(path: string): number {
 
 function estimateQuantFromPath(path: string): string {
   const lower = path.toLowerCase()
-  if (lower.includes('awq')) return 'awq'
-  if (lower.includes('gptq')) return 'gptq'
-  if (lower.includes('fp8')) return 'fp8'
-  if (lower.includes('int4') || lower.includes('4bit')) return 'int4'
-  if (lower.includes('int8') || lower.includes('8bit')) return 'int8'
+  if (lower.includes('awq')) return 'auto'
+  if (lower.includes('gptq')) return 'auto'
+  if (lower.includes('fp8')) return 'auto'
+  if (lower.includes('int4') || lower.includes('4bit')) return 'auto'
+  if (lower.includes('int8') || lower.includes('8bit')) return 'auto'
   return ''
 }
 
