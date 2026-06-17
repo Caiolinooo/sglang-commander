@@ -121,7 +121,10 @@ class SglangBackend(BackendProvider):
             env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        
+
+        # Bypass flashinfer version mismatch between flashinfer and flashinfer-jit-cache
+        env["FLASHINFER_DISABLE_VERSION_CHECK"] = "1"
+
         # Disable HuggingFace progress bars (tqdm) to avoid logs hanging due to carriage returns (\r)
         env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
