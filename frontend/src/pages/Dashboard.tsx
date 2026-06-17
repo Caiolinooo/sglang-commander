@@ -148,35 +148,42 @@ export default function Dashboard() {
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const wsUrl = `${protocol}://${window.location.host}/ws/metrics`
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        setMetrics(data)
-        setMetricsHistory(prev => {
-          const keys = ['gen_throughput', 'e2e_latency_avg_ms', 'ttft_avg_ms', 'gpu_util',
-            'gpu_mem_used_mb', 'num_queue_reqs', 'cache_hit_rate', 'token_usage']
-          const next = { ...prev }
-          for (const k of keys) {
-            const val = data[k] ?? 0
-            const arr = [...(prev[k] || []), val]
-            next[k] = arr.slice(-60)
+
+    function connectWs() {
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+      ws.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data)
+          if (parsed.type === 'metrics_snapshot' && parsed.data) {
+            const mData = parsed.data
+            setMetrics(mData)
+            setMetricsHistory(prev => {
+              const keys = ['gen_throughput', 'e2e_latency_avg_ms', 'ttft_avg_ms', 'gpu_util',
+                'gpu_mem_used_mb', 'num_queue_reqs', 'cache_hit_rate', 'token_usage']
+              const next = { ...prev }
+              for (const k of keys) {
+                const val = mData[k] ?? 0
+                const arr = [...(prev[k] || []), val]
+                next[k] = arr.slice(-60)
+              }
+              return next
+            })
           }
-          return next
-        })
-      } catch {}
+        } catch {}
+      }
+      ws.onerror = () => {}
+      ws.onclose = () => {
+        setTimeout(() => {
+          if (wsRef.current === ws) {
+            connectWs()
+          }
+        }, 5000)
+      }
     }
-    ws.onerror = () => {}
-    ws.onclose = () => {
-      setTimeout(() => {
-        if (wsRef.current === ws) {
-          const newWs = new WebSocket(wsUrl)
-          wsRef.current = newWs
-        }
-      }, 5000)
-    }
-    return () => { ws.close(); wsRef.current = null }
+
+    connectWs()
+    return () => { wsRef.current?.close(); wsRef.current = null }
   }, [])
 
   const running = status.running
