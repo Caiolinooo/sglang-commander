@@ -121,6 +121,9 @@ class SglangBackend(BackendProvider):
             env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        
+        # Disable HuggingFace progress bars (tqdm) to avoid logs hanging due to carriage returns (\r)
+        env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
         if settings.huggingface_token:
             env["HF_TOKEN"] = settings.huggingface_token
@@ -281,6 +284,10 @@ class SglangBackend(BackendProvider):
         # Always enable metrics
         if "--enable-metrics" not in cmd:
             cmd.append("--enable-metrics")
+
+        # Always enable debug logging if not explicitly set
+        if "--log-level" not in cmd:
+            cmd.extend(["--log-level", "debug"])
 
         # Raw custom args passthrough
         custom_args = config.get("custom_args")
