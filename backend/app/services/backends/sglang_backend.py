@@ -225,13 +225,21 @@ class SglangBackend(BackendProvider):
         if config.get("mem_fraction_static") is not None:
             cmd.extend(["--mem-fraction-static", str(config["mem_fraction_static"])])
         if config.get("cpu_offload_gb") is not None and config["cpu_offload_gb"] > 0:
-            cmd.extend(["--cpu-offload-gb", str(int(config["cpu_offload_gb"]))])
-            if not config.get("disable_cuda_graph"):
-                cmd.append("--disable-cuda-graph")
+            # Qwen models have a bug in SGLang 0.5.13 with CPU offload (layernorm device mismatch)
+            if "qwen" in config.get("model_path", "").lower():
                 self._log_lines.append(
-                    "[FIX] CPU offload active — CUDA graphs auto-disabled "
-                    "(offloader has tied-weights conflict)"
+                    "[FIX] CPU offload disabled — Qwen models are incompatible with "
+                    "--cpu-offload-gb in SGLang 0.5.13 (device mismatch in layernorm)"
                 )
+                config["cpu_offload_gb"] = 0
+            else:
+                cmd.extend(["--cpu-offload-gb", str(int(config["cpu_offload_gb"]))])
+                if not config.get("disable_cuda_graph"):
+                    cmd.append("--disable-cuda-graph")
+                    self._log_lines.append(
+                        "[FIX] CPU offload active — CUDA graphs auto-disabled "
+                        "(offloader has tied-weights conflict)"
+                    )
         if config.get("disable_cuda_graph"):
             if "--disable-cuda-graph" not in cmd:
                 cmd.append("--disable-cuda-graph")
