@@ -4,15 +4,15 @@ Checks all known failure points before attempting to launch sglang:
 - Python version
 - sglang installation + version + deep imports (full traceback)
 - transformers / kernels / torch versions
-- PyTorch installation and CUDA support
-- NVIDIA GPU availability + VRAM
+- PyTorch installation and accelerator (CUDA / ROCm / MPS) support
+- GPU availability + VRAM
 - FlashAttention / triton
 - Disk space, RAM
 """
 import asyncio
-import os
 import shutil
 from typing import Optional
+
 
 
 class DiagnosticResult:
@@ -81,15 +81,15 @@ async def run_full_diagnostics(python_cmd: str) -> DiagnosticResult:
     result.versions["torch"] = torch_msg.replace("PyTorch ", "") if torch_ok else "missing"
     result.add_check("PyTorch", torch_ok, torch_msg, torch_fix, "error" if not torch_ok else "info")
 
-    # CUDA / GPU
-    cuda_ok, cuda_msg, cuda_fix, has_gpu = await _check_cuda(python_cmd)
-    result.add_check("CUDA toolkit", cuda_ok, cuda_msg, cuda_fix, "warning" if not cuda_ok else "info")
+    # Accelerator / GPU
+    acc_ok, acc_msg, acc_fix, acc_has = await _check_accelerator(python_cmd)
+    result.add_check("Accelerator (GPU)", acc_ok, acc_msg, acc_fix, "warning" if not acc_ok else "info")
 
-    if not has_gpu:
+    if not acc_has:
         result.add_check(
-            "NVIDIA GPU", False,
-            "No NVIDIA GPU detected. sglang requires GPU (won't work on CPU).",
-            "Run on a machine with NVIDIA GPU. Use 'nvidia-smi' to verify.", "error"
+            "GPU", False,
+            "No GPU detected. sglang requires a GPU (won't work on CPU).",
+            "Run on a machine with a supported GPU (NVIDIA CUDA, AMD ROCm, Apple MPS).", "error"
         )
         return result
 
@@ -141,13 +141,10 @@ async def _check_sglang_imports(python_cmd: str) -> tuple[bool, str, Optional[st
         )
         ver_out, ver_err = await ver_proc.communicate()
         sglang_version = "unknown"
-        sglang_path = "unknown"
         if ver_proc.returncode == 0:
             lines = ver_out.decode().strip().split("\n")
             if len(lines) >= 1:
                 sglang_version = lines[0]
-            if len(lines) >= 2:
-                sglang_path = lines[1]
         else:
             # sglang not importable at all
             err = ver_err.decode(errors="replace").strip()
@@ -232,37 +229,51 @@ async def _check_torch(python_cmd: str) -> tuple[bool, str, Optional[str]]:
         return False, f"Error: {e}", None
 
 
-async def _check_cuda(python_cmd: str) -> tuple[bool, str, Optional[str], bool]:
+async def _check_accelerator(python_cmd: str) -> tuple[bool, str, Optional[str], bool]:
+    """Detect any GPU accelerator: CUDA (NVIDIA), ROCm (AMD), MPS (Apple)."""
     try:
         proc = await asyncio.create_subprocess_exec(
             python_cmd, "-c",
-            "import torch; print('CUDA:', torch.cuda.is_available()); print('GPUs:', torch.cuda.device_count()); "
-            "print('Name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')",
+            "import torch; "
+            "cuda = torch.cuda.is_available(); "
+            "mps = torch.backends.mps.is_available(); "
+            "gpus = torch.cuda.device_count(); "
+            "name = torch.cuda.get_device_name(0) if cuda else 'none'; "
+            "print(f'CUDA:{cuda} MPS:{mps} GPUs:{gpus} Name:{name}')",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return False, f"Torch CUDA check failed: {stderr.decode()[:150]}", None, False
+            msg = f"PyTorch not found or broken: {stderr.decode()[:150]}"
+            return False, msg, f"{python_cmd} -m pip install torch", False
 
-        out = stdout.decode()
-        has_cuda = "CUDA: True" in out
+        out = stdout.decode().strip()
+        has_cuda = "CUDA:True" in out
+        has_mps = "MPS:True" in out
         gpu_count = 0
         gpu_name = "none"
-        for line in out.split("\n"):
-            if line.startswith("GPUs:"):
-                try: gpu_count = int(line.split(":", 1)[1].strip())
-                except: pass
-            if line.startswith("Name:"):
-                gpu_name = line.split(":", 1)[1].strip()
 
-        if not has_cuda:
-            return False, "PyTorch was not compiled with CUDA support", \
-                f"{python_cmd} -m pip install torch --index-url https://download.pytorch.org/whl/cu121", False
+        for line in out.split():
+            if line.startswith("GPUs:"):
+                try:
+                    gpu_count = int(line.split(":")[1])
+                except Exception:
+                    pass
+            if line.startswith("Name:"):
+                gpu_name = line.split(":", 1)[1] if ":" in line else "none"
+
+        if has_cuda:
+            vendor = "CUDA"
+        elif has_mps:
+            vendor = "MPS (Apple Silicon)"
+        else:
+            return False, "PyTorch has no GPU backend (CUDA/MPS). Install the correct torch build.", \
+                f"{python_cmd} -m pip install torch --index-url https://download.pytorch.org/whl/cu124", False
 
         if gpu_count == 0:
-            return True, "CUDA available but no GPU detected", None, False
+            return True, f"{vendor} available but no GPU detected", None, False
 
-        return True, f"{gpu_count} GPU(s): {gpu_name}", None, True
+        return True, f"{gpu_count} GPU(s) [{vendor}]: {gpu_name}", None, True
     except Exception as e:
         return False, f"Error: {e}", None, False
 
@@ -314,15 +325,24 @@ def _check_disk_space() -> tuple[bool, str, Optional[str]]:
 
 def _check_memory() -> tuple[bool, str, Optional[str]]:
     try:
-        with open("/proc/meminfo") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    total_kb = int(line.split()[1])
-                    total_gb = total_kb // (1024 ** 2)
-                    if total_gb < 8:
-                        return False, f"Only {total_gb}GB RAM (8GB+ recommended)", \
-                            "Add more RAM or use a smaller model"
-                    return True, f"{total_gb}GB RAM", None
+        total_gb = 0
+        try:
+            import psutil
+            total_gb = round(psutil.virtual_memory().total / (1024 ** 3))
+        except Exception:
+            try:
+                with open("/proc/meminfo") as f:
+                    for line in f:
+                        if line.startswith("MemTotal:"):
+                            total_kb = int(line.split()[1])
+                            total_gb = total_kb // (1024 ** 2)
+            except Exception:
+                pass
+        if total_gb > 0:
+            if total_gb < 8:
+                return False, f"Only {total_gb}GB RAM (8GB+ recommended)", \
+                    "Add more RAM or use a smaller model"
+            return True, f"{total_gb}GB RAM", None
     except Exception:
         pass
     return True, "Could not check RAM", None

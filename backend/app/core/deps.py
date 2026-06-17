@@ -33,7 +33,7 @@ async def get_current_user(
         if user:
             return user
 
-    result = await db.execute(select(ApiKey).where(ApiKey.key == token, ApiKey.is_active == True))
+    result = await db.execute(select(ApiKey).where(ApiKey.key == token, ApiKey.is_active))
     api_key = result.scalar_one_or_none()
     if api_key:
         result = await db.execute(select(User).where(User.id == api_key.user_id))

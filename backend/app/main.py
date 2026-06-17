@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -143,6 +142,16 @@ async def lifespan(app: FastAPI):
     # Log detected environment
     cuda = settings.resolved_cuda_home
     venv = settings.resolved_venv_path
+    try:
+        from app.services.gpu_detector import get_vendor_display, get_gpu_count
+        gpu_vendor = get_vendor_display()
+        gpu_count = get_gpu_count()
+        if gpu_count > 0:
+            logger.info(f"GPU: {gpu_vendor} ({gpu_count} device(s))")
+        else:
+            logger.info("GPU: none detected")
+    except Exception:
+        pass
     logger.info(f"CUDA_HOME: {cuda or 'not detected'}")
     logger.info(f"VENV: {venv or 'not detected'}")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
@@ -215,7 +224,10 @@ async def _metrics_broadcaster():
         await asyncio.sleep(2)
         snapshot = metrics_collector.get_latest()
         if snapshot:
-            await ws_manager.broadcast(snapshot)
+            await ws_manager.broadcast({
+                "type": "metrics_snapshot",
+                "data": snapshot,
+            })
 
 
 # Mount frontend wrapper at the root level last so Starlette matches more specific api/websocket routes first.

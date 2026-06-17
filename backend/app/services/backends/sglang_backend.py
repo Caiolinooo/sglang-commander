@@ -72,28 +72,32 @@ class SglangBackend(BackendProvider):
         # Disable stdout buffering so logs stream in real-time
         env["PYTHONUNBUFFERED"] = "1"
 
-        # PATH: prepend venv bin + optional CUDA bin
+        # PATH: prepend venv bin + optional compute home bin
         venv_bin = getattr(settings, "venv_path", None)
         if venv_bin is None and hasattr(sys, "prefix"):
             venv_bin = os.path.join(sys.prefix, "bin")
-        cuda_home = getattr(settings, "cuda_home", None)
-        if cuda_home is None:
-            cuda_home = self._detect_cuda_home()
+        compute_home = getattr(settings, "cuda_home", None)
+        if compute_home is None:
+            compute_home = self._detect_cuda_home()
 
         path_parts: list[str] = []
         if venv_bin and os.path.isdir(venv_bin):
             path_parts.append(venv_bin)
-        if cuda_home:
-            cuda_bin = os.path.join(cuda_home, "bin")
-            if os.path.isdir(cuda_bin):
-                path_parts.append(cuda_bin)
+        if compute_home:
+            compute_bin = os.path.join(compute_home, "bin")
+            if os.path.isdir(compute_bin):
+                path_parts.append(compute_bin)
         path_parts.append(env.get("PATH", ""))
         env["PATH"] = os.pathsep.join(path_parts)
 
-        if cuda_home:
-            env["CUDA_HOME"] = cuda_home
+        if compute_home:
+            if shutil.which("nvidia-smi") or os.path.isdir(os.path.join(compute_home, "include", "cuda_runtime_api.h")):
+                env["CUDA_HOME"] = compute_home
+            elif shutil.which("rocm-smi") or os.path.isdir(os.path.join(compute_home, "include", "hip")):
+                env["ROCM_HOME"] = compute_home
+                env["HIP_VISIBLE_DEVICES"] = os.environ.get("HIP_VISIBLE_DEVICES", "0")
 
-        # Add pip-installed nvidia package library paths to LD_LIBRARY_PATH
+        # Add pip-installed nvidia/amd library paths to LD_LIBRARY_PATH
         ld_paths = []
         if hasattr(sys, "prefix"):
             lib_dir = os.path.join(sys.prefix, "lib")
@@ -102,12 +106,13 @@ class SglangBackend(BackendProvider):
                     if py_dir.startswith("python"):
                         sp_dir = os.path.join(lib_dir, py_dir, "site-packages")
                         if os.path.isdir(sp_dir):
-                            nvidia_dir = os.path.join(sp_dir, "nvidia")
-                            if os.path.isdir(nvidia_dir):
-                                for pkg in os.listdir(nvidia_dir):
-                                    pkg_lib = os.path.join(nvidia_dir, pkg, "lib")
-                                    if os.path.isdir(pkg_lib):
-                                        ld_paths.append(pkg_lib)
+                            for vendor_dir in ("nvidia", "amd"):
+                                vd = os.path.join(sp_dir, vendor_dir)
+                                if os.path.isdir(vd):
+                                    for pkg in os.listdir(vd):
+                                        pkg_lib = os.path.join(vd, pkg, "lib")
+                                        if os.path.isdir(pkg_lib):
+                                            ld_paths.append(pkg_lib)
 
         current_ld = env.get("LD_LIBRARY_PATH", "")
         if current_ld:
@@ -131,13 +136,18 @@ class SglangBackend(BackendProvider):
 
     @staticmethod
     def _detect_cuda_home() -> Optional[str]:
-        """Best-effort CUDA home detection from nvidia-smi or known paths."""
+        """Detect GPU compute home: CUDA (NVIDIA), ROCm (AMD), or intel-level-zero."""
         nvidia_smi = shutil.which("nvidia-smi")
         if nvidia_smi:
             cuda_dir = os.path.dirname(os.path.dirname(nvidia_smi))
             if os.path.isdir(cuda_dir):
                 return cuda_dir
-        for candidate in ("/usr/local/cuda", "/usr/local/cuda-12"):
+        rocm_smi = shutil.which("rocm-smi")
+        if rocm_smi:
+            rocm_dir = os.path.dirname(os.path.dirname(rocm_smi))
+            if os.path.isdir(rocm_dir):
+                return rocm_dir
+        for candidate in ("/usr/local/cuda", "/usr/local/cuda-12", "/opt/rocm"):
             if os.path.isdir(candidate):
                 return candidate
         return None

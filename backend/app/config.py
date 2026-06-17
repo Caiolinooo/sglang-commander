@@ -10,12 +10,15 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 
 
 def _auto_detect_cuda_home() -> Optional[str]:
-    """Detect CUDA home from common locations and nvidia-smi."""
+    """Detect GPU compute home from common locations."""
     candidates = [
         os.environ.get("CUDA_HOME"),
         os.environ.get("CUDA_PATH"),
+        os.environ.get("ROCM_HOME"),
+        os.environ.get("ROCM_PATH"),
         "/usr/local/cuda",
         "/usr/lib/cuda",
+        "/opt/rocm",
     ]
     # Check for pip-installed nvidia packages
     try:

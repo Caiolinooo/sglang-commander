@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional
 
 
 class HFSearchRequest(BaseModel):
@@ -115,20 +115,3 @@ class DownloadModelRequest(BaseModel):
     revision: str = "main"
 
 
-class HFSearchRequest(BaseModel):
-    query: str = ""
-    limit: int = Field(default=20, ge=1, le=100)
-    task: Optional[str] = None
-    library: Optional[str] = None
-    license: Optional[str] = None
-    framework: Optional[str] = None
-    language: Optional[str] = None
-    author: Optional[str] = None
-    sort_by: str = "downloads"
-    sort_dir: int = -1
-    min_params: Optional[float] = None
-    max_params: Optional[float] = None
-    quantization: Optional[str] = None
-    format: Optional[str] = None
-    fits_gpu: bool = False
-    multimodal: bool = False

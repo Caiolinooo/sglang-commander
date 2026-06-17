@@ -3,7 +3,7 @@ import json
 import sys
 import shutil
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 class DependencyUpdater:
     def __init__(self):

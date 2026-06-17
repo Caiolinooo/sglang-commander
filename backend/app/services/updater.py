@@ -1,7 +1,4 @@
-import asyncio
-import json
 import os
-from typing import Optional
 
 import httpx
 import semver
@@ -86,7 +83,7 @@ class Updater:
                     total = int(r.headers.get("content-length", 0))
                     downloaded = 0
 
-                    temp_path = f"sglang_commander_update.tmp"
+                    temp_path = "sglang_commander_update.tmp"
                     with open(temp_path, "wb") as f:
                         async for chunk in r.aiter_bytes(chunk_size=8192):
                             f.write(chunk)

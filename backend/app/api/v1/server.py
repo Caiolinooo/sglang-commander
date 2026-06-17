@@ -4,7 +4,6 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.server import ServerStartRequest, ServerStatusResponse
 from app.services.server_manager import server_manager
-from app.services.model_manager import model_manager, _estimate_vram_gb
 from app.services.model_manager import model_manager
 
 router = APIRouter()

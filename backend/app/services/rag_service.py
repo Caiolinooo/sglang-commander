@@ -1,7 +1,7 @@
 import io
 import os
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Fallbacks for langchain splitters
 try:

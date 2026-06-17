@@ -229,31 +229,53 @@ export interface ModelValidation {
   }
 }
 
-export interface GPUProcess {
+export interface CPUCoreMetrics {
+  index: number
+  percent: number
+  frequency_mhz: number
+}
+
+export interface DiskIOMetrics {
+  read_bytes_s: number
+  write_bytes_s: number
+  read_count_s: number
+  write_count_s: number
+  percent: number
+}
+
+export interface NetworkIOMetrics {
+  bytes_sent_s: number
+  bytes_recv_s: number
+  packets_sent_s: number
+  packets_recv_s: number
+}
+
+export interface SwapMetrics {
+  percent: number
+  used_gb: number
+  total_gb: number
+}
+
+export interface ProcessMetrics {
   pid: number
   name: string
-  used_mb: number
+  cpu_percent: number
+  memory_mb: number
+  gpu_memory_mb: number
 }
 
-export interface GPULiveInfo {
+export interface GPUMetrics {
   index: number
   name: string
-  total_mb: number
-  used_mb: number
-  free_mb: number
-  utilization_pct: number
-  gpu_util_pct: number
-  memory_util_pct: number
-  temperature_c: number
+  vendor: string
+  util_pct: number
+  mem_used_mb: number
+  mem_total_mb: number
+  mem_free_mb: number
+  temp_c: number
   power_w: number
-  power_limit_w: number
-  processes: GPUProcess[]
-}
-
-export interface GPULiveStatus {
-  gpus: GPULiveInfo[]
-  count: number
-  error?: string
+  mem_util_pct: number
+  processes: ProcessMetrics[]
 }
 
 export interface MetricsSnapshot {
@@ -268,14 +290,97 @@ export interface MetricsSnapshot {
   ttft_avg_ms: number
   tpot_avg_ms: number
   e2e_latency_avg_ms: number
-  gpu_util: number
-  gpu_mem_used_mb: number
-  gpu_mem_total_mb: number
-  gpu_temp_c: number
-  gpu_power_w: number
+  context_len: number
+  kv_available_tokens: number
+  utilization: number
+  queue_time_avg_ms: number
+  new_token_ratio: number
+
+  gpu: GPUMetrics[]
+  gpu_vendor: string
+  gpu_count: number
+
   cpu_percent: number
+  cpu_cores: CPUCoreMetrics[]
+  cpu_freq_mhz: number
+  cpu_count_logical: number
+  cpu_count_physical: number
+  cpu_load_1m: number
+  cpu_load_5m: number
+  cpu_load_15m: number
+
   ram_percent: number
-  gpu_live?: GPULiveStatus
+  ram_used_gb: number
+  ram_total_gb: number
+  ram_available_gb: number
+
+  swap: SwapMetrics
+  disk: DiskIOMetrics
+  network: NetworkIOMetrics
+
+  processes_top: ProcessMetrics[]
+}
+
+export interface GPUProcess {
+  pid: number
+  name: string
+  used_mb: number
+}
+
+export interface GPULiveInfo {
+  index: number
+  name: string
+  vendor?: string
+  total_mb: number
+  used_mb: number
+  free_mb: number
+  gpu_util_pct?: number
+  memory_util_pct?: number
+  temperature_c?: number
+  power_w?: number
+  power_limit_w?: number
+  processes: GPUProcess[]
+}
+
+export interface GPULiveStatus {
+  gpus: GPULiveInfo[]
+  count: number
+  error?: string
+}
+
+export interface MoESimulation {
+  model: {
+    params_billions: number
+    num_experts: number
+    active_experts: number
+    quantization: string
+    model_vram_estimate_gb: number
+    dense_weights_gb: number
+  }
+  config: {
+    cpu_offload_gb: number
+    experts_on_gpu: number
+    experts_on_cpu: number
+    active_cpu_experts_per_token: number
+  }
+  performance: {
+    estimated_tokens_per_sec: number
+    estimated_latency_ms: number
+    cpu_penalty_ms_per_token: number
+    vram_used_gb: number
+    vram_free_gb: number
+    vram_total_gb: number
+  }
+  gpu: {
+    vendor: string
+    name: string
+    count: number
+  }
+  grade: {
+    quality: string
+    score: number
+    note: string
+  }
 }
 
 export interface ModelSearchFilters {

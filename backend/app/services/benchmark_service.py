@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import Optional
 
 import httpx
 
@@ -104,7 +103,7 @@ class BenchmarkService:
                         self._current_run = i + 1
                         self._progress = (i + 1) / num_runs * 100
 
-                valid_latencies = [l for l in latencies if l > 0]
+                valid_latencies = [x for x in latencies if x > 0]
                 total_tokens = sum(tokens_per_run)
                 total_time = sum(valid_latencies)
                 error_count = sum(1 for e in errors_per_run if e is not None)

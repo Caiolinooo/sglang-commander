@@ -41,7 +41,7 @@ class PromptTemplate(Base):
             return ""
         try:
             return SafeFormatter().format(self.content, **inputs)
-        except Exception as e:
+        except Exception:
             # Fallback in case of syntax error in template format
             rendered = self.content
             for k, v in inputs.items():

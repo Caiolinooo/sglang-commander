@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from app.core.database import async_session_factory
 from app.models.chat import ChatConversation, ChatMessage
 

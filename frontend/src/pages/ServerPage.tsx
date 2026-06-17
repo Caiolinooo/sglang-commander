@@ -15,9 +15,10 @@ function GPUStatusBar() {
   if (!gpuStatus || !gpuStatus.gpus?.length) return null
   const gpu = gpuStatus.gpus[0]
 
-  const memPct = gpu.utilization_pct
-  const gpuPct = gpu.gpu_util_pct
-  const tempColor = gpu.temperature_c > 80 ? 'text-danger' : gpu.temperature_c > 65 ? 'text-warning' : 'text-success'
+  const memPct = gpu.memory_util_pct ?? (gpu.total_mb > 0 ? (gpu.used_mb / gpu.total_mb * 100) : 0)
+  const gpuPct = gpu.gpu_util_pct ?? 0
+  const tempC = gpu.temperature_c ?? 0
+  const tempColor = tempC > 80 ? 'text-danger' : tempC > 65 ? 'text-warning' : 'text-success'
   const memColor = memPct > 90 ? 'bg-danger' : memPct > 70 ? 'bg-warning' : 'bg-primary'
 
   return (
@@ -31,10 +32,10 @@ function GPUStatusBar() {
           </div>
           <div className="flex items-center gap-3 text-xs">
             <span className={cn("flex items-center gap-1", tempColor)}>
-              <Thermometer className="h-3 w-3" /> {gpu.temperature_c}°C
+              <Thermometer className="h-3 w-3" /> {tempC}°C
             </span>
             <span className="flex items-center gap-1 text-text-muted">
-              <Power className="h-3 w-3" /> {gpu.power_w}W / {gpu.power_limit_w}W
+              <Power className="h-3 w-3" /> {gpu.power_w ?? '?'}W / {gpu.power_limit_w ?? '?'}W
             </span>
           </div>
         </div>
@@ -42,7 +43,7 @@ function GPUStatusBar() {
         <div className="space-y-1.5 mb-3">
           <div className="flex justify-between text-xs">
             <span className="text-text-muted">VRAM</span>
-            <span className="font-mono">{(gpu.used_mb / 1024).toFixed(1)} / {(gpu.total_mb / 1024).toFixed(1)} GB ({memPct.toFixed(0)}%)</span>
+            <span className="font-mono">{(gpu.used_mb / 1024).toFixed(1)} / {(gpu.total_mb / 1024).toFixed(1)} GB ({(memPct ?? 0).toFixed(0)}%)</span>
           </div>
           <div className="h-3 bg-surface-2 rounded-full overflow-hidden">
             <div className={cn("h-full rounded-full transition-all duration-500", memColor)}
@@ -54,6 +55,7 @@ function GPUStatusBar() {
           <div className="flex justify-between text-xs">
             <span className="text-text-muted">GPU Utilization</span>
             <span className="font-mono">{gpuPct}%</span>
+            <span className="text-text-muted text-[10px] ml-auto">Mem: {(memPct ?? 0).toFixed(0)}%</span>
           </div>
           <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
             <div className="h-full bg-info rounded-full transition-all duration-500"

@@ -1,10 +1,9 @@
-import json, asyncio
+import json
+import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.chat import ChatRequest
@@ -106,7 +105,7 @@ async def chat_completion(
                         f"Given the context information above, answer the query:\n"
                         f"{user_msg.content}"
                     )
-            except Exception as e:
+            except Exception:
                 # Log and continue without crashing
                 pass
 

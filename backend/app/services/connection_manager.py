@@ -1,4 +1,3 @@
-import asyncio
 import os
 from typing import Dict, Any, Optional
 import asyncssh
@@ -43,7 +42,7 @@ class ConnectionManagerService:
             else:
                 return False, "Missing password or key_path for selected auth method"
 
-            async with asyncssh.connect(**connect_kwargs) as conn:
+            async with asyncssh.connect(**connect_kwargs):
                 # Connected successfully!
                 return True, "Connection successful"
         except Exception as e:

@@ -62,7 +62,7 @@ async def run_rebuild_and_restart():
         # Try npm install + build
         subprocess.run(["npm", "install"], cwd=frontend_dir, check=True, timeout=120)
         subprocess.run(["npm", "run", "build"], cwd=frontend_dir, check=True, timeout=120)
-    except Exception as e:
+    except Exception:
         # Fallback to npx vite build without npm install
         try:
             subprocess.run(["npx", "vite", "build"], cwd=frontend_dir, check=True, timeout=120)

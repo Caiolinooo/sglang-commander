@@ -1,7 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
-from app.core.deps import get_current_user
-from app.models.user import User
 from app.services.metrics_collector import metrics_collector
 
 router = APIRouter()

@@ -1,4 +1,3 @@
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -26,12 +25,4 @@ async def get_db():
 
 async def init_db():
     async with engine.begin() as conn:
-        from app.models.user import User
-        from app.models.session import Session
-        from app.models.server_config import ServerConfig
-        from app.models.api_key import ApiKey
-        from app.models.chat import ChatConversation, ChatMessage
-        from app.models.template import PromptTemplate
-        from app.models.batch import BatchJob
-        from app.models.connection import ConnectionProfile
         await conn.run_sync(Base.metadata.create_all)

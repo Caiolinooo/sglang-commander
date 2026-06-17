@@ -1,7 +1,5 @@
 import asyncio
-import json
 import sys
-from typing import Optional
 
 
 class DependencyManager:
@@ -27,9 +25,10 @@ class DependencyManager:
         "pyqtgraph>=0.13.0",
     ]
 
-    GPU_PACKAGES = [
-        "pynvml>=11.5.0",
-    ]
+    @property
+    def GPU_PACKAGES(self) -> list[str]:
+        from app.services.gpu_detector import get_gpu_packages
+        return get_gpu_packages()
 
     async def check_package(self, package_spec: str) -> dict:
         import importlib.metadata

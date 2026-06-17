@@ -1,6 +1,5 @@
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
 from app.models.server_config import ServerConfig
 from app.schemas.server import ServerProfileCreate, ServerProfileUpdate
 
@@ -55,7 +54,7 @@ class ServerProfileService:
         return True
 
     async def set_active(self, db: AsyncSession, profile_id: int) -> dict | None:
-        await db.execute(delete(ServerConfig).where(ServerConfig.is_active == True))
+        await db.execute(delete(ServerConfig).where(ServerConfig.is_active))
         result = await db.execute(select(ServerConfig).where(ServerConfig.id == profile_id))
         profile = result.scalar_one_or_none()
         if not profile:
@@ -66,7 +65,7 @@ class ServerProfileService:
         return self._to_dict(profile)
 
     async def get_active(self, db: AsyncSession) -> dict | None:
-        result = await db.execute(select(ServerConfig).where(ServerConfig.is_active == True))
+        result = await db.execute(select(ServerConfig).where(ServerConfig.is_active))
         row = result.scalar_one_or_none()
         return self._to_dict(row) if row else None
 

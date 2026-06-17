@@ -3,8 +3,6 @@ import csv
 import json
 import os
 import time
-import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import httpx
 from sqlalchemy import select

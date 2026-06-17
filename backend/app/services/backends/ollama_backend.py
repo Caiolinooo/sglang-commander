@@ -11,7 +11,6 @@ from typing import Optional
 
 import httpx
 
-from app.config import settings
 from app.services.backends.base import BackendProvider, BackendType
 
 

@@ -1,11 +1,16 @@
+import asyncio
 import os
 import re
 import json
-import glob as glob_mod
 from typing import Optional
 
 from huggingface_hub import HfApi, snapshot_download, scan_cache_dir
 from app.config import settings
+from app.services.gpu_detector import (
+    get_basic_info as _gpu_basic_info,
+    get_live_info as _gpu_live_info,
+    get_all_detailed_status as _gpu_detailed_status,
+)
 
 
 def _get_model_scan_dirs() -> list[str]:
@@ -35,26 +40,6 @@ _VRAM_TABLE = {
 # VRAM overhead: KV cache + activations + framework (GB)
 _KV_CACHE_OVERHEAD = 2.0
 _FRAMEWORK_OVERHEAD = 1.5
-
-
-def _get_gpu_info() -> dict:
-    """Get GPU VRAM info via pynvml or fallback."""
-    try:
-        import pynvml
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        name = pynvml.nvmlDeviceGetName(handle)
-        if isinstance(name, bytes):
-            name = name.decode()
-        return {
-            "name": name,
-            "total_gb": round(mem.total / 1024 / 1024 / 1024, 1),
-            "free_gb": round(mem.free / 1024 / 1024 / 1024, 1),
-            "used_gb": round(mem.used / 1024 / 1024 / 1024, 1),
-        }
-    except Exception:
-        return {"name": "Unknown", "total_gb": 0, "free_gb": 0, "used_gb": 0}
 
 
 def _estimate_params_billions(tags: list, model_name: str, config: dict = None) -> Optional[float]:
@@ -206,7 +191,7 @@ class ModelManager:
         import time
         now = time.time()
         if now - self._gpu_cache_time > 10:
-            self._gpu_cache = _get_gpu_info()
+            self._gpu_cache = _gpu_basic_info()
             self._gpu_cache_time = now
         return self._gpu_cache
 
@@ -523,8 +508,6 @@ class ModelManager:
     async def list_local_models(self) -> list[dict]:
         try:
             cache_info = scan_cache_dir()
-            gpu = self._get_gpu()
-            gpu_total = gpu.get("total_gb", 0)
             models = []
             for repo in cache_info.repos:
                 revisions = []
@@ -543,7 +526,7 @@ class ModelManager:
                     "revisions": revisions,
                 })
             return models
-        except Exception as e:
+        except Exception:
             return []
 
     async def get_model_card(self, repo_id: str) -> str:
@@ -654,7 +637,6 @@ class ModelManager:
             # Detect MTP (Multi-Token Prediction) / Speculative decoding support
             has_mtp_head = False
             mtp_layer_count = 0
-            arch_str = " ".join(architectures).lower() if architectures else ""
             tags_lower = " ".join(tags).lower()
             if "mtp" in model_name.lower() or "multi-token" in model_name.lower() or "speculative" in model_name.lower():
                 has_mtp_head = True
@@ -737,7 +719,6 @@ class ModelManager:
 
             gpu = self._get_gpu()
             gpu_total = gpu.get("total_gb", 0)
-            gpu_free = gpu.get("free_gb", 0)
 
             params_b = model_info.get("params_billions", 0) or 0
             quant = model_info.get("quantization", "fp16")
@@ -1120,7 +1101,7 @@ class ModelManager:
                     "tokens": _estimate_max_tokens(context_length, params_b or 0, vram_gb) if params_b else None,
                 })
 
-        except Exception as e:
+        except Exception:
             # Fallback: scan directories manually
             pass
 
@@ -1445,9 +1426,9 @@ class ModelManager:
             # Check 1: CompressedTensors + Marlin tile issue
             if quant_method == "compressed_tensors" or quant_method == "compressed-tensors":
                 warnings.append(
-                    f"Model uses CompressedTensors quantization. This may cause "
-                    f"'size_n not divisible by tile_n_size' errors with MoE models. "
-                    f"If loading fails, try: --quantization bitsandbytes"
+                    "Model uses CompressedTensors quantization. This may cause "
+                    "'size_n not divisible by tile_n_size' errors with MoE models. "
+                    "If loading fails, try: --quantization bitsandbytes"
                 )
                 suggestions.append("Use --quantization bitsandbytes if Marlin fails")
 
@@ -1559,176 +1540,16 @@ class ModelManager:
         return {"valid": True, "warnings": [], "errors": [], "suggestions": [], "model_info": None}
 
     async def get_gpu_processes(self) -> dict:
-        """Get GPU memory usage per process."""
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-
-            device_count = pynvml.nvmlDeviceGetCount()
-            gpus = []
-
-            for i in range(device_count):
-                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                name = pynvml.nvmlDeviceGetName(handle)
-                if isinstance(name, bytes):
-                    name = name.decode()
-
-                processes = []
-                try:
-                    procs = pynvml.nvmlDeviceGetComputeRunningProcesses_v2(handle)
-                    for p in procs:
-                        proc_name = "unknown"
-                        try:
-                            proc_name = pynvml.nvmlSystemGetProcessName(p.pid)
-                            if isinstance(proc_name, bytes):
-                                proc_name = proc_name.decode()
-                        except Exception:
-                            try:
-                                import psutil
-                                proc = psutil.Process(p.pid)
-                                proc_name = proc.name()
-                            except Exception:
-                                proc_name = f"PID {p.pid}"
-
-                        processes.append({
-                            "pid": p.pid,
-                            "name": proc_name,
-                            "used_mb": round(p.usedGpuMemory / 1024 / 1024, 1) if p.usedGpuMemory else 0,
-                        })
-                except Exception:
-                    pass
-
-                # Also check graphics processes
-                try:
-                    procs = pynvml.nvmlDeviceGetGraphicsRunningProcesses_v2(handle)
-                    for p in procs:
-                        if any(proc["pid"] == p.pid for proc in processes):
-                            continue
-                        proc_name = "unknown"
-                        try:
-                            proc_name = pynvml.nvmlSystemGetProcessName(p.pid)
-                            if isinstance(proc_name, bytes):
-                                proc_name = proc_name.decode()
-                        except Exception:
-                            try:
-                                import psutil
-                                proc = psutil.Process(p.pid)
-                                proc_name = proc.name()
-                            except Exception:
-                                proc_name = f"PID {p.pid}"
-
-                        processes.append({
-                            "pid": p.pid,
-                            "name": proc_name,
-                            "used_mb": round(p.usedGpuMemory / 1024 / 1024, 1) if p.usedGpuMemory else 0,
-                        })
-                except Exception:
-                    pass
-
-                gpus.append({
-                    "index": i,
-                    "name": name,
-                    "total_mb": round(mem.total / 1024 / 1024, 1),
-                    "used_mb": round(mem.used / 1024 / 1024, 1),
-                    "free_mb": round(mem.free / 1024 / 1024, 1),
-                    "utilization": round(mem.used / mem.total * 100, 1) if mem.total > 0 else 0,
-                    "processes": processes,
-                })
-
-            return {"gpus": gpus, "count": device_count}
-        except Exception as e:
-            return {"gpus": [], "count": 0, "error": str(e)}
+        result = _gpu_live_info()
+        gpus = result.get("gpus", [])
+        for g in gpus:
+            g["utilization"] = round(g.get("used_mb", 0) / max(g.get("total_mb", 1), 1) * 100, 1)
+            g["processes"] = []
+        return result
 
     async def get_live_gpu_status(self) -> dict:
-        """Get combined GPU status: memory, processes, utilization, temperature."""
-        try:
-            import pynvml
-            pynvml.nvmlInit()
-
-            device_count = pynvml.nvmlDeviceGetCount()
-            gpus = []
-
-            for i in range(device_count):
-                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                name = pynvml.nvmlDeviceGetName(handle)
-                if isinstance(name, bytes):
-                    name = name.decode()
-                temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                power = pynvml.nvmlDeviceGetPowerUsage(handle)
-                power_limit = pynvml.nvmlDeviceGetPowerManagementLimit(handle)
-
-                processes = []
-                try:
-                    procs = pynvml.nvmlDeviceGetComputeRunningProcesses_v2(handle)
-                    for p in procs:
-                        proc_name = "unknown"
-                        try:
-                            proc_name = pynvml.nvmlSystemGetProcessName(p.pid)
-                            if isinstance(proc_name, bytes):
-                                proc_name = proc_name.decode()
-                        except Exception:
-                            try:
-                                import psutil
-                                proc = psutil.Process(p.pid)
-                                proc_name = proc.name()
-                            except Exception:
-                                proc_name = f"PID {p.pid}"
-
-                        processes.append({
-                            "pid": p.pid,
-                            "name": proc_name,
-                            "used_mb": round(p.usedGpuMemory / 1024 / 1024, 1) if p.usedGpuMemory else 0,
-                        })
-                except Exception:
-                    pass
-
-                try:
-                    procs = pynvml.nvmlDeviceGetGraphicsRunningProcesses_v2(handle)
-                    for p in procs:
-                        if any(proc["pid"] == p.pid for proc in processes):
-                            continue
-                        proc_name = "unknown"
-                        try:
-                            proc_name = pynvml.nvmlSystemGetProcessName(p.pid)
-                            if isinstance(proc_name, bytes):
-                                proc_name = proc_name.decode()
-                        except Exception:
-                            try:
-                                import psutil
-                                proc = psutil.Process(p.pid)
-                                proc_name = proc.name()
-                            except Exception:
-                                proc_name = f"PID {p.pid}"
-
-                        processes.append({
-                            "pid": p.pid,
-                            "name": proc_name,
-                            "used_mb": round(p.usedGpuMemory / 1024 / 1024, 1) if p.usedGpuMemory else 0,
-                        })
-                except Exception:
-                    pass
-
-                gpus.append({
-                    "index": i,
-                    "name": name,
-                    "total_mb": round(mem.total / 1024 / 1024, 1),
-                    "used_mb": round(mem.used / 1024 / 1024, 1),
-                    "free_mb": round(mem.free / 1024 / 1024, 1),
-                    "utilization_pct": round(mem.used / mem.total * 100, 1) if mem.total > 0 else 0,
-                    "gpu_util_pct": util.gpu,
-                    "memory_util_pct": util.memory,
-                    "temperature_c": float(temp),
-                    "power_w": round(power / 1000.0, 1),
-                    "power_limit_w": round(power_limit / 1000.0, 1),
-                    "processes": processes,
-                })
-
-            return {"gpus": gpus, "count": device_count}
-        except Exception as e:
-            return {"gpus": [], "count": 0, "error": str(e)}
+        result = _gpu_detailed_status()
+        return result
 
 
 model_manager = ModelManager()

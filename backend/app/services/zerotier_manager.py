@@ -1,10 +1,7 @@
 import asyncio
-import json
 from typing import Optional
 
-import aiohttp
 
-from app.config import settings
 
 
 class ZeroTierManager:
