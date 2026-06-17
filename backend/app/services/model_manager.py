@@ -21,24 +21,6 @@ def _get_model_scan_dirs() -> list[str]:
 
 hf_api = HfApi(token=settings.huggingface_token)
 
-# Approximate VRAM in GB for common model sizes at different quantizations
-# Key: parameter count (billions), Value: {precision: vram_gb}
-_VRAM_TABLE = {
-    1: {"fp16": 2, "int8": 1, "int4": 0.5},
-    3: {"fp16": 6, "int8": 3, "int4": 2},
-    7: {"fp16": 14, "int8": 7, "int4": 4},
-    8: {"fp16": 16, "int8": 8, "int4": 5},
-    13: {"fp16": 26, "int8": 13, "int4": 7},
-    14: {"fp16": 28, "int8": 14, "int4": 8},
-    27: {"fp16": 54, "int8": 27, "int4": 15},
-    30: {"fp16": 60, "int8": 30, "int4": 16},
-    32: {"fp16": 64, "int8": 32, "int4": 18},
-    70: {"fp16": 140, "int8": 70, "int4": 40},
-    72: {"fp16": 144, "int8": 72, "int4": 42},
-}
-
-# VRAM overhead: KV cache + activations + framework (GB)
-_KV_CACHE_OVERHEAD = 2.0
 _FRAMEWORK_OVERHEAD = 1.5
 
 
@@ -115,53 +97,125 @@ def _detect_quantization(tags: list, model_name: str) -> str:
     return "fp16"
 
 
-def _estimate_vram_gb(params_b: float, quant: str, context_length: int = 4096) -> float:
-    """Estimate VRAM needed in GB."""
+def _dtype_bytes(quant: str, dtype: str = "auto") -> float:
+    """Get bytes per parameter from quantization and dtype strings."""
+    q = quant.lower()
+    if any(x in q for x in ("awq", "gptq", "int4")):
+        return 0.5
+    if "fp8" in q or "int8" in q:
+        return 1.0
+    if any(x in q for x in ("q2", "iq2")):
+        return 0.25
+    if any(x in q for x in ("q3", "iq3")):
+        return 0.375
+    if any(x in q for x in ("q4", "iq4")):
+        return 0.5
+    if "q5" in q or "iq5" in q:
+        return 0.625
+    if "q6" in q:
+        return 0.75
+    if "q8" in q:
+        return 1.0
+    d = dtype.lower()
+    if d in ("float32", "fp32"):
+        return 4.0
+    if d in ("bfloat16", "bf16", "half", "float16", "fp16"):
+        return 2.0
+    return 2.0
+
+
+def _kv_cache_bytes(kv_dtype: str) -> float:
+    """Get KV cache bytes per element."""
+    k = kv_dtype.lower()
+    if "fp4" in k:
+        return 0.5
+    if "fp8" in k:
+        return 1.0
+    return 2.0
+
+
+def _estimate_vram_gb(
+    params_b: float,
+    quant: str,
+    context_length: int = 4096,
+    dtype: str = "auto",
+    cpu_offload_gb: float = 0,
+    tensor_parallel_size: int = 1,
+    ep_size: int = 1,
+    kv_cache_dtype: str = "auto",
+    max_running_requests: int = 2,
+    mem_fraction_static: float = 0.88,
+    total_vram_gb: float = 0,
+    enable_multimodal: bool = False,
+    speculative_algorithm: str = "",
+    speculative_draft_model_path: str = "",
+) -> dict:
+    """Estimate VRAM breakdown in GB using formula-based calculation.
+
+    Returns dict with breakdown and total.
+    """
     if params_b <= 0:
-        return 0
+        return {"total": 0, "model_weights": 0, "kv_cache": 0, "activations": 0, "overhead": 0, "vision_tower": 0, "speculative": 0, "cpu_offloaded": 0, "fits": False}
 
-    quant_key = quant.lower()
-    if quant_key in ("awq", "gptq", "int4"):
-        precision = "int4"
-    elif quant_key in ("int8",):
-        precision = "int8"
-    elif quant_key in ("fp8",):
-        precision = "int8"  # fp8 ≈ int8 for memory
-    elif quant_key in ("fp16", "bf16", "safetensors", "unknown", ""):
-        precision = "fp16"
+    bpp = _dtype_bytes(quant, dtype)
+    kv_bpp = _kv_cache_bytes(kv_cache_dtype)
+
+    # 1. Model weights
+    raw_model = params_b * bpp
+    tp = max(1, tensor_parallel_size)
+    ep = max(1, ep_size)
+    model_after = raw_model / tp / ep
+    cpu_off = min(cpu_offload_gb, model_after)
+    weights_on_gpu = max(0, model_after - cpu_off)
+
+    # 2. KV Cache
+    kv_base = 2.0
+    kv_ctx = max(1, context_length) / 4096
+    kv_param = max(1, params_b) / 7
+    kv_dtype_s = kv_bpp / 2.0
+    kv_cache = kv_base * kv_ctx * kv_param * kv_dtype_s / tp
+    if total_vram_gb > 0:
+        kv_cache = min(kv_cache, total_vram_gb * mem_fraction_static)
+
+    # 3. Activations
+    activations = 0.5 * max(1, max_running_requests) * (params_b / 7) / tp
+
+    # 4. Vision Tower
+    vision = 1.5 if enable_multimodal else 0.0
+
+    # 5. Speculative
+    spec = 0.0
+    if speculative_algorithm:
+        if speculative_draft_model_path:
+            import re
+            m = re.search(r"(\d+(\.\d+)?)[bB]", speculative_draft_model_path)
+            draft_p = float(m.group(1)) if m else 1.0
+            spec = draft_p * bpp / tp
+        elif speculative_algorithm.upper() == "EAGLE":
+            spec = max(1.0, weights_on_gpu * 0.15)
+        elif speculative_algorithm.upper() == "NGRAM":
+            spec = 0.2
+
+    overhead = 1.5
+    total = weights_on_gpu + kv_cache + activations + overhead + vision + spec
+
+    if total_vram_gb > 0:
+        fits = total <= total_vram_gb * 0.95
     else:
-        # GGUF or custom - estimate from quant string
-        if "q2" in quant_key or "iq2" in quant_key:
-            precision = "int4"  # very aggressive
-        elif "q3" in quant_key or "iq3" in quant_key:
-            precision = "int4"
-        elif "q4" in quant_key or "iq4" in quant_key:
-            precision = "int4"
-        elif "q5" in quant_key:
-            precision = "int8"  # between int4 and fp16
-        elif "q6" in quant_key:
-            precision = "int8"
-        elif "q8" in quant_key:
-            precision = "int8"
-        else:
-            precision = "fp16"
+        fits = False
 
-    # Find closest parameter count in table
-    closest = min(_VRAM_TABLE.keys(), key=lambda x: abs(x - params_b))
-    if abs(closest - params_b) > params_b * 0.3:
-        # Too far, use linear scaling from nearest
-        base_params = closest
-        base_vram = _VRAM_TABLE[base_params][precision]
-        scaled = base_vram * (params_b / base_params)
-    else:
-        scaled = _VRAM_TABLE[closest][precision]
-
-    # Add KV cache estimation (rough: 2 bytes * 2 * layers * context * head_dim)
-    # Approximate: ~0.5GB per 4K context for 7B, scale linearly
-    kv_gb = (context_length / 4096) * (params_b / 7) * 0.5
-
-    total = scaled + kv_gb + _FRAMEWORK_OVERHEAD
-    return round(total, 1)
+    return {
+        "total": round(total, 1),
+        "model_weights": round(weights_on_gpu, 1),
+        "kv_cache": round(kv_cache, 1),
+        "activations": round(activations, 1),
+        "overhead": overhead,
+        "vision_tower": round(vision, 1),
+        "speculative": round(spec, 1),
+        "cpu_offloaded": round(cpu_off, 1),
+        "fits": fits,
+        "bytes_per_param": bpp,
+    }
 
 
 def _estimate_max_tokens(context_length: int, params_b: float, vram_gb: float) -> dict:
@@ -301,9 +355,11 @@ class ModelManager:
                 context_length = 4096
                 vram_gb = 0
                 if params_b:
-                    vram_gb = _estimate_vram_gb(params_b, quant, context_length)
-
-                fits = gpu_total > 0 and vram_gb > 0 and vram_gb <= gpu_total
+                    vram_info = _estimate_vram_gb(params_b, quant, context_length)
+                    vram_gb = vram_info["total"]
+                    fits = vram_info["fits"]
+                else:
+                    fits = False
 
                 # VRAM fits filter (post-filter)
                 if fits_gpu and not fits:
@@ -563,9 +619,13 @@ class ModelManager:
                 or 4096
             )
 
-            vram_gb = _estimate_vram_gb(params_b or 0, quant, context_length) if params_b else 0
-            gpu = self._get_gpu()
-            fits = gpu.get("total_gb", 0) > 0 and vram_gb > 0 and vram_gb <= gpu.get("total_gb", 0)
+            if params_b:
+                vram_info = _estimate_vram_gb(params_b, quant, context_length)
+                vram_gb = vram_info["total"]
+                fits = vram_info["fits"]
+            else:
+                vram_gb = 0
+                fits = False
 
             return {
                 "repo_id": repo_id,
@@ -663,9 +723,13 @@ class ModelManager:
             ) or "qwen3" in model_name.lower() or "deepseek-r1" in model_name.lower()
 
             # Estimate VRAM
-            vram_gb = _estimate_vram_gb(params_b or 0, quant, context_length) if params_b else 0
-            gpu = self._get_gpu()
-            fits = gpu.get("total_gb", 0) > 0 and vram_gb > 0 and vram_gb <= gpu.get("total_gb", 0)
+            if params_b:
+                vram_info = _estimate_vram_gb(params_b, quant, context_length)
+                vram_gb = vram_info["total"]
+                fits = vram_info["fits"]
+            else:
+                vram_gb = 0
+                fits = False
 
             # Determine recommended settings
             recommended = {
@@ -746,7 +810,8 @@ class ModelManager:
             }
 
             # Calculate VRAM needed
-            vram_gb = _estimate_vram_gb(params_b, quant, context_length)
+            vram_info = _estimate_vram_gb(params_b, quant, context_length)
+            vram_gb = vram_info["total"]
             vram_with_overhead = vram_gb + 1.5  # framework overhead
 
             # Adjust for different scenarios
@@ -754,7 +819,8 @@ class ModelManager:
                 # Model won't fit - suggest aggressive quantization
                 if quant.lower() not in ("awq", "gptq", "int4", "int8", "fp8", "gguf"):
                     recommendations["quantization"] = "awq"
-                    vram_gb = _estimate_vram_gb(params_b, "awq", context_length)
+                    vram_info_awq = _estimate_vram_gb(params_b, "awq", context_length)
+                    vram_gb = vram_info_awq["total"]
                     vram_with_overhead = vram_gb + 1.5
 
             if vram_with_overhead > gpu_total * 0.95:
@@ -831,8 +897,9 @@ class ModelManager:
             best_fit = None
 
             for prec in precisions:
-                est = _estimate_vram_gb(params_b, prec, ctx_len)
-                fits = gpu_total > 0 and est <= gpu_total
+                est_info = _estimate_vram_gb(params_b, prec, ctx_len)
+                est = est_info["total"]
+                fits = est_info["fits"]
                 offload = max(0.0, round(est - gpu_total, 1))
                 options[prec] = {
                     "vram_estimate_gb": est,
@@ -1071,8 +1138,13 @@ class ModelManager:
                     warnings.append("MoE model - ensure enough VRAM for all experts or use quantization")
 
                 # Estimate VRAM
-                vram_gb = _estimate_vram_gb(params_b or 0, quant, context_length) if params_b else 0
-                fits = gpu_total > 0 and vram_gb > 0 and vram_gb <= gpu_total
+                if params_b:
+                    vram_info = _estimate_vram_gb(params_b, quant, context_length)
+                    vram_gb = vram_info["total"]
+                    fits = vram_info["fits"]
+                else:
+                    vram_gb = 0
+                    fits = False
 
                 fmt = "safetensors" if has_safetensors else "unknown"
 
@@ -1197,8 +1269,13 @@ class ModelManager:
                 if quant_method_full == "compressed_tensors":
                     warnings.append("CompressedTensors quantization may have compatibility issues")
 
-                vram_gb = _estimate_vram_gb(params_b or 0, quant, context_length) if params_b else 0
-                fits = gpu_total > 0 and vram_gb > 0 and vram_gb <= gpu_total
+                if params_b:
+                    vram_info = _estimate_vram_gb(params_b, quant, context_length)
+                    vram_gb = vram_info["total"]
+                    fits = vram_info["fits"]
+                else:
+                    vram_gb = 0
+                    fits = False
 
                 models.append({
                     "repo_id": repo_id,
@@ -1473,7 +1550,8 @@ class ModelManager:
                     )
 
             # Check 7: VRAM estimate
-            vram_gb = _estimate_vram_gb(params_b, quantization or quant_method or "fp16", 4096)
+            vram_info = _estimate_vram_gb(params_b, quantization or quant_method or "fp16", 4096)
+            vram_gb = vram_info["total"]
             if gpu_total > 0 and vram_gb > gpu_total:
                 errors.append(
                     f"Estimated VRAM ({vram_gb}GB) exceeds GPU ({gpu_total}GB). "

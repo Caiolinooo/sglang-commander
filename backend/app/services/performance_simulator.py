@@ -266,7 +266,8 @@ def simulate_generic_model(
 ) -> dict:
     """Simulate any dense model (non-MoE) performance."""
     qk = _quant_key(quantization)
-    vram_gb = _estimate_vram_gb(params_b, quantization, context_length)
+    vram_info = _estimate_vram_gb(params_b, quantization, context_length)
+    vram_gb = vram_info["total"]
     gpu = _gpu_info()
     total_vram = gpu.get("total_gb", 0) or 0
     free_vram = gpu.get("free_gb", 0) or 0

@@ -71,7 +71,9 @@ export function validateConfig(config: {
 
   // 3. CPU offload > model weights (wasteful)
   if (config.cpu_offload_gb > 0) {
-    const modelVramEst = config.params_billions * 2
+    const bpp = config.quantization?.toLowerCase().includes('awq') || config.quantization?.toLowerCase().includes('gptq') || config.quantization?.toLowerCase().includes('int4') ? 0.5
+      : config.quantization?.toLowerCase().includes('fp8') || config.quantization?.toLowerCase().includes('int8') ? 1 : 2
+    const modelVramEst = config.params_billions * bpp
     const maxUsefulOffload = Math.min(modelVramEst, config.total_vram_gb * 0.9)
     if (config.cpu_offload_gb > maxUsefulOffload) {
       issues.push({
