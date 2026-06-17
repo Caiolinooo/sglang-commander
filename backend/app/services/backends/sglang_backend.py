@@ -131,9 +131,10 @@ class SglangBackend(BackendProvider):
         if config.get("speculative_algorithm"):
             env["SGLANG_ENABLE_SPEC_V2"] = "1"
 
-        # Merge extra env vars from settings if present
-        extra_env: dict = getattr(settings, "sglang_extra_env", None) or {}
-        env.update(extra_env)
+        # Merge extra env vars from settings (parsed JSON dict)
+        extra_env = settings.resolved_extra_env
+        if extra_env:
+            env.update(extra_env)
 
         return env
 

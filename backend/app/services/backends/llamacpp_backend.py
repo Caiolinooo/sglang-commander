@@ -86,6 +86,10 @@ class LlamaCppBackend(BackendProvider):
         port = config.get("port", 8081)
         ctx_size = config.get("ctx_size", config.get("context_length", 4096))
         n_gpu_layers = config.get("n_gpu_layers", -1)
+        cpu_offload_gb = config.get("cpu_offload_gb", 0)
+        if cpu_offload_gb > 0 and n_gpu_layers == -1:
+            n_gpu_layers = 0
+            self._log_lines.append("[INFO] cpu_offload_gb > 0: setting n_gpu_layers=0 (all layers on CPU). For fine-grained control, set n_gpu_layers directly.")
         threads = config.get("threads", os.cpu_count() or 4)
 
         cmd = [

@@ -408,7 +408,7 @@ export default function ServerConfigPanel() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    {renderTooltipLabel("CPU Offload (GB)", "Offload model weights to system RAM. Slows down generation but prevents GPU OOM for large models.")}
+                    {renderTooltipLabel("CPU Offload (GB)", "Offload model weights to system RAM. Slows down generation but prevents GPU OOM for large models. For llama.cpp, GB is converted to layer offload.")}
                     <Input type="number" value={advanced.cpu_offload_gb} onChange={e => updateA('cpu_offload_gb', Number(e.target.value))} placeholder="0 = disabled" className="h-9 font-mono text-xs" />
                   </div>
                   <div>

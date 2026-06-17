@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { getServerStatus, getLatestMetrics, listLocalModels } from '../api/endpoints'
 import type { ServerStatus } from '../types'
-import { Activity, Clock, Database, Gauge, Server, Box, Inbox, ArrowUpRight, PlayCircle, Plus, Cpu, Timer, ArrowDown, ArrowUp } from 'lucide-react'
+import { Activity, Clock, Database, Gauge, Server, Box, Inbox, ArrowUpRight, PlayCircle, Plus, Cpu, Timer, ArrowDown, ArrowUp, Terminal } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { cn } from '../components/ui/Button'
+import { useServerStore } from '../stores'
 
 function GaugeRing({ value, max, label, unit, color, size = 120 }: {
   value: number; max: number; label: string; unit: string; color: string; size?: number
@@ -105,12 +106,24 @@ export default function Dashboard() {
     gpu_mem_used_mb: [], num_queue_reqs: [], cache_hit_rate: [], token_usage: [],
   })
   const wsRef = useRef<WebSocket | null>(null)
+  const { logs, fetchLogs } = useServerStore()
+  const logEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
 
   useEffect(() => {
     const h = new Date().getHours()
     if (h < 12) setGreeting('Good morning')
     else if (h < 18) setGreeting('Good afternoon')
     else setGreeting('Good evening')
+  }, [])
+
+  useEffect(() => {
+    fetchLogs()
+    const i = setInterval(fetchLogs, 3000)
+    return () => clearInterval(i)
   }, [])
 
   const fetch = useCallback(async () => {
@@ -403,6 +416,33 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Live Console Output */}
+      <Card className="border-border/60 bg-surface/40">
+        <CardHeader className="border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Terminal className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm">Live Console</CardTitle>
+            <span className="text-[10px] bg-surface-2 px-2 py-0.5 rounded font-mono text-text-muted ml-auto">
+              {logs.length} lines
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="h-[200px] overflow-y-auto bg-black/80 rounded-b-xl p-4 font-mono text-[11px] text-green-400/90 space-y-1 scrollbar-thin select-text">
+            {logs.length === 0 ? (
+              <p className="text-text-muted/50 italic">No logs yet. Launch the server to see output here.</p>
+            ) : (
+              logs.slice(-50).map((line, i) => (
+                <div key={i} className="leading-relaxed break-all whitespace-pre-wrap opacity-80 hover:opacity-100">
+                  {line}
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

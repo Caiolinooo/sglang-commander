@@ -221,12 +221,15 @@ export default function ServerPage() {
   }, [])
 
   useEffect(() => {
+    fetchLogs()
     const i = setInterval(() => {
       fetchStatus()
-      fetchLogs()
       fetchGPU()
     }, 1000)
-    return () => clearInterval(i)
+    const li = setInterval(() => {
+      fetchLogs()
+    }, 2000)
+    return () => { clearInterval(i); clearInterval(li) }
   }, [])
 
   useEffect(() => {
