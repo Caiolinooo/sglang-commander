@@ -174,7 +174,7 @@ export default function Dashboard() {
     }
 
     connectWs()
-    return () => { ws.close(); wsRef.current = null }
+    return () => { wsRef.current?.close(); wsRef.current = null }
   }, [])
 
   const running = status.running
