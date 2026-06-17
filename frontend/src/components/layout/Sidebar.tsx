@@ -20,7 +20,8 @@ import {
   Activity,
   GitCompare,
   FileSpreadsheet,
-  Network
+  Network,
+  ChevronDown
 } from 'lucide-react'
 
 const sections = [
@@ -70,51 +71,58 @@ export default function Sidebar() {
   const activeConn = connections.find(c => c.id === activeConnectionId)
 
   return (
-    <div className="w-64 h-full bg-surface border-r border-border flex flex-col transition-colors z-20 shrink-0">
+    <div className="w-68 h-full bg-surface/40 backdrop-blur-2xl border-r border-white/5 flex flex-col transition-colors z-20 shrink-0 shadow-xl shadow-black/20">
       {/* Header */}
-      <div className="h-16 px-6 flex items-center border-b border-border">
+      <div className="h-[76px] px-6 flex items-center border-b border-white/5 relative">
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
         <div className="flex items-center gap-3">
-          <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center text-white shadow-lg shadow-primary/25 border border-primary/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-primary/30 border border-white/10 ring-2 ring-primary/20 ring-offset-1 ring-offset-transparent">
             <TerminalSquare size={18} className="animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-sm font-bold text-text tracking-tight uppercase">SGLang</h2>
-              <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/10 tracking-widest">PRO</span>
+              <h2 className="text-base font-extrabold text-text tracking-tight uppercase">SGLang</h2>
+              <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded text-white bg-gradient-to-r from-primary to-indigo-500 shadow-sm tracking-widest">PRO</span>
             </div>
-            <p className="text-[10px] text-text-muted font-medium mt-0.5">Commander v0.1.0</p>
+            <p className="text-[10px] text-text-muted/80 font-semibold tracking-wide">Commander v0.1.0</p>
           </div>
         </div>
       </div>
 
       {/* Global Connection Selector */}
-      <div className="px-4 pt-4 pb-2 border-b border-border/60">
-        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest opacity-60 px-1 block mb-2">
-          Environment target
+      <div className="px-5 pt-5 pb-3">
+        <label className="text-[10px] font-bold text-text-muted/60 uppercase tracking-widest block mb-2 px-1">
+          Environment Target
         </label>
-        <select
-          value={activeConnectionId || ''}
-          onChange={(e) => setActiveConnection(e.target.value || null)}
-          className="w-full h-8 px-2 rounded-lg bg-surface-2 border border-border text-xs text-text focus:outline-none focus:border-primary cursor-pointer font-medium"
-        >
-          <option value="">Localhost (127.0.0.1)</option>
-          {connections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} ({c.host})
-            </option>
-          ))}
-        </select>
-        <div className="mt-1 px-1 flex items-center gap-1.5 text-[9px] font-medium text-text-muted">
-          <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? 'bg-info' : 'bg-success animate-pulse'}`} />
-          <span>Target: {activeConnectionId ? `Remote SSH (${activeConn?.name})` : 'Local Engine'}</span>
+        <div className="relative group">
+          <select
+            value={activeConnectionId || ''}
+            onChange={(e) => setActiveConnection(e.target.value || null)}
+            className="w-full h-10 pl-3 pr-8 rounded-xl bg-surface-2/50 border border-white/5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 cursor-pointer font-medium appearance-none transition-all hover:bg-surface-2/80 shadow-inner"
+          >
+            <option value="">Localhost (127.0.0.1)</option>
+            {connections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.host})
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none group-hover:text-text transition-colors" />
+        </div>
+        <div className="mt-2.5 px-1.5 flex items-center gap-2 text-[10px] font-semibold text-text-muted/80">
+          <span className="relative flex h-2 w-2">
+            {!activeConnectionId && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>}
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${activeConnectionId ? 'bg-info' : 'bg-success'}`}></span>
+          </span>
+          <span>{activeConnectionId ? `Remote: ${activeConn?.name}` : 'Local Engine Active'}</span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-4 space-y-5 overflow-y-auto scrollbar-thin">
+      <nav className="flex-1 px-3 py-4 space-y-6 overflow-y-auto scrollbar-thin">
         {sections.map((section) => (
-          <div key={section.title} className="space-y-1.5">
-            <h3 className="px-3 text-[10px] font-bold text-text-muted uppercase tracking-widest opacity-60">
+          <div key={section.title} className="space-y-2">
+            <h3 className="px-4 text-[10px] font-bold text-text-muted/50 uppercase tracking-widest">
               {section.title}
             </h3>
             <div className="space-y-0.5">
@@ -126,20 +134,20 @@ export default function Sidebar() {
                     to={item.to}
                     end={item.to === '/'}
                     className={({ isActive }) =>
-                      `group relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      `group relative flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
                         isActive
-                          ? 'bg-primary/10 text-primary font-semibold shadow-sm'
-                          : 'text-text-muted hover:text-text hover:bg-surface-2'
+                          ? 'bg-gradient-to-r from-primary/15 to-transparent text-primary font-bold shadow-sm'
+                          : 'text-text-muted/80 hover:text-text hover:bg-surface-2/50'
                       }`
                     }
                   >
                     {({ isActive }) => (
                       <>
                         {isActive && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-primary" />
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r bg-primary shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
                         )}
-                        <Icon size={17} className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-primary' : 'text-text-muted group-hover:text-text'}`} />
-                        <span>{item.label}</span>
+                        <Icon size={18} className={`transition-all duration-300 ${isActive ? 'text-primary scale-110' : 'text-text-muted/70 group-hover:text-text group-hover:scale-105'}`} />
+                        <span className="tracking-wide">{item.label}</span>
                       </>
                     )}
                   </NavLink>
@@ -151,19 +159,19 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer / User section */}
-      <div className="p-4 border-t border-border bg-surface/50 backdrop-blur-sm">
-        <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-2/40 border border-border/50 hover:border-border transition-all duration-300">
+      <div className="p-4 border-t border-white/5 bg-black/10 backdrop-blur-xl">
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-2/30 border border-white/5 hover:bg-surface-2/50 hover:border-white/10 transition-all duration-300 group">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary/20 to-violet-600/20 border border-primary/30 flex items-center justify-center text-xs text-primary font-bold uppercase ring-2 ring-primary/5">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary/30 to-indigo-600/30 border border-white/10 flex items-center justify-center text-sm text-white font-bold uppercase ring-2 ring-primary/10 group-hover:ring-primary/30 transition-all">
                 {user?.username?.[0] || 'U'}
               </div>
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-success border-2 border-surface" />
+              <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success border-2 border-surface shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-text truncate">{user?.username || 'User'}</span>
-              <span className="text-[9px] text-text-muted font-medium flex items-center gap-1">
-                <Shield size={9} className="text-primary" /> Admin
+              <span className="text-sm font-bold text-text truncate tracking-tight">{user?.username || 'User'}</span>
+              <span className="text-[10px] text-text-muted/80 font-semibold flex items-center gap-1.5 mt-0.5">
+                <Shield size={10} className="text-primary" /> Admin
               </span>
             </div>
           </div>
@@ -171,17 +179,17 @@ export default function Sidebar() {
           <div className="flex items-center gap-1">
             <button 
               onClick={toggleTheme}
-              className="p-1.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text transition-colors"
+              className="p-2 rounded-xl hover:bg-surface-2/80 text-text-muted hover:text-text transition-all active:scale-95"
               title="Toggle theme"
             >
-              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <button 
               onClick={logout}
-              className="p-1.5 rounded-lg hover:bg-danger/10 hover:text-danger text-text-muted transition-colors"
+              className="p-2 rounded-xl hover:bg-danger/15 hover:text-danger text-text-muted transition-all active:scale-95"
               title="Sign out"
             >
-              <LogOut size={14} />
+              <LogOut size={15} />
             </button>
           </div>
         </div>
