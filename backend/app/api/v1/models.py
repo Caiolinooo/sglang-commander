@@ -66,7 +66,7 @@ async def download_model(
     return await model_manager.download_model(req.repo_id, req.revision)
 
 
-@router.get("/download-status/{repo_id}")
+@router.get("/download-status/{repo_id:path}")
 async def download_status(repo_id: str):
     status = await model_manager.get_download_status(repo_id)
     if status.get("status") == "not_found":
