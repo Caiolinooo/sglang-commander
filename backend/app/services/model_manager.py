@@ -493,8 +493,9 @@ class ModelManager:
             })
 
     async def get_download_status(self, repo_id: str) -> dict:
+        prefix = f"{repo_id}@"
         for task_id, info in self._download_tasks.items():
-            if repo_id in task_id:
+            if task_id.startswith(prefix):
                 return info
         return {"status": "not_found"}
 

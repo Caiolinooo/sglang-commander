@@ -68,7 +68,9 @@ async def download_model(
 
 @router.get("/download-status/{repo_id:path}")
 async def download_status(repo_id: str):
-    status = await model_manager.get_download_status(repo_id)
+    from urllib.parse import unquote
+    decoded = unquote(repo_id)
+    status = await model_manager.get_download_status(decoded)
     if status.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Download task not found")
     return status
