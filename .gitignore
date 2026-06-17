@@ -45,6 +45,9 @@ data/
 uploads/
 *.chroma/
 
+# Scratch
+scratch/
+
 # Virtual environments
 .venv/
 venv/

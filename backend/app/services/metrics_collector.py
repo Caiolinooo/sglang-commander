@@ -50,23 +50,43 @@ class MetricsCollector:
             **await self._scrape_sglang_metrics(),
         }
         gpu_status = _gpu_all_detailed()
-        base["gpu"] = gpu_status.get("gpus", [])
+        gpus = gpu_status.get("gpus", [])
+        base["gpu"] = gpus
         base["gpu_count"] = gpu_status.get("count", 0)
         base["gpu_vendor"] = _gpu_vendor()
+        if gpus:
+            g0 = gpus[0]
+            base["gpu_util"] = g0.get("gpu_util_pct", 0)
+            base["gpu_mem_used_mb"] = g0.get("used_mb", 0)
+            base["gpu_mem_total_mb"] = g0.get("total_mb", 0)
+            base["gpu_temp_c"] = g0.get("temperature_c", 0)
+            base["gpu_power_w"] = g0.get("power_w", 0)
+        else:
+            base["gpu_util"] = 0
+            base["gpu_mem_used_mb"] = 0
+            base["gpu_mem_total_mb"] = 0
+            base["gpu_temp_c"] = 0
+            base["gpu_power_w"] = 0
         return base
 
     def _get_system_metrics(self) -> dict:
         now = time.time()
         dt = max(now - self._prev_time, 0.1)
 
-        cpu_percent = psutil.cpu_percent(interval=None)
+        cpu_percent_percpu = psutil.cpu_percent(interval=None, percpu=True)
+        cpu_percent = sum(cpu_percent_percpu) / len(cpu_percent_percpu) if cpu_percent_percpu else 0.0
         cpu_cores = []
-        for i, p in enumerate(psutil.cpu_percent(interval=None, percpu=True)):
+        try:
+            freqs = psutil.cpu_freq(percpu=True)
+        except Exception:
+            freqs = None
+        for i, p in enumerate(cpu_percent_percpu):
             freq = 0.0
-            try:
-                freq = psutil.cpu_freq(percpu=True)[i].current if hasattr(psutil.cpu_freq(percpu=True), '__iter__') else 0.0
-            except Exception:
-                pass
+            if isinstance(freqs, (list, tuple)) and i < len(freqs):
+                try:
+                    freq = freqs[i].current
+                except Exception:
+                    pass
             cpu_cores.append({"index": i, "percent": p, "frequency_mhz": freq})
 
         cpu_freq = psutil.cpu_freq()

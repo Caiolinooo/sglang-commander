@@ -152,7 +152,8 @@ async def chat_completion(
                     async with client.stream("POST", url, json=payload) as r:
                         if r.status_code != 200:
                             error_body = await r.aread()
-                            yield f"data: {json.dumps({'error': f'SGLang returned {r.status_code}: {error_body.decode(errors='replace')[:200]}'})}\n\n"
+                            err_text = error_body.decode(errors='replace')[:200]
+                            yield f"data: {json.dumps({'error': f'SGLang returned {r.status_code}: {err_text}'})}\n\n"
                             yield "data: [DONE]\n\n"
                             return
                         async for line in r.aiter_lines():

@@ -29,7 +29,7 @@ export const getServerLogs = (cursor: number = 0) =>
   apiClient.get(`/server/logs?cursor=${cursor}`)
 export const healthCheck = () => apiClient.get('/server/health')
 export const getModelInfo = () => apiClient.get('/server/model-info')
-export const getArgsRegistry = () => apiClient.get<{ args: any[] }>('/server/args-registry')
+export const getArgsRegistry = () => apiClient.get<{ args: unknown[] }>('/server/args-registry')
 export const getVramEstimate = (config: Record<string, unknown>) =>
   apiClient.post<{
     gpu: GPUInfo;
@@ -44,7 +44,7 @@ export const getVramEstimate = (config: Record<string, unknown>) =>
     warnings: string[];
   }>('/server/vram-estimate', config)
 export const validateModel = (config: Record<string, unknown>) =>
-  apiClient.post<{ valid: boolean; warnings: string[]; errors: string[]; suggestions: string[]; model_info: any }>('/server/validate', config)
+  apiClient.post<{ valid: boolean; warnings: string[]; errors: string[]; suggestions: string[]; model_info: unknown }>('/server/validate', config)
 
 
 // Server Profiles
@@ -70,7 +70,7 @@ export const deleteConversation = (id: number) =>
   apiClient.delete(`/chat/conversations/${id}`)
 export const getConversationMessages = (id: number) =>
   apiClient.get(`/chat/conversations/${id}/messages`)
-export const saveConversationMessages = (id: number, messages: any[]) =>
+export const saveConversationMessages = (id: number, messages: unknown[]) =>
   apiClient.post(`/chat/conversations/${id}/messages`, { messages })
 export const updateConversationTitle = (id: number, title: string) =>
   apiClient.patch(`/chat/conversations/${id}/title`, { title })

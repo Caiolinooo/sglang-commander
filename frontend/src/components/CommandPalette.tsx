@@ -8,7 +8,7 @@ interface CommandItem {
   id: string
   title: string
   subtitle?: string
-  icon: any
+  icon: typeof Server
   action: () => void
   category: string
 }
@@ -99,13 +99,16 @@ export default function CommandPalette() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showCommandPalette, filtered, selectedIndex, status.running])
+  }, [showCommandPalette, filtered, selectedIndex, status.running, setShowCommandPalette, newConversation, navigate, startServer, stopServer])
 
   useEffect(() => {
     if (showCommandPalette) {
-      setQuery('')
-      setSelectedIndex(0)
-      setTimeout(() => inputRef.current?.focus(), 50)
+      const id = setTimeout(() => {
+        setQuery('')
+        setSelectedIndex(0)
+        inputRef.current?.focus()
+      }, 0)
+      return () => clearTimeout(id)
     }
   }, [showCommandPalette])
 
